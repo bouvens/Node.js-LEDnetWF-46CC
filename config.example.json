@@ -1,0 +1,14 @@
+{
+  "device": {
+    "id": "your-device-id-here",
+    "name": "LEDnetWF"
+  },
+  "ble": {
+    "service_uuid": "ffe5",
+    "tx_char_uuid": "ff01",
+    "rx_char_uuid": "ff02"
+  },
+  "defaults": {
+    "rgb": "255,0,0"
+  }
+} 

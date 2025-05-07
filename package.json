@@ -1,0 +1,19 @@
+{
+  "name": "led-strip",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "led": "node lednet.js",
+    "led:on": "node lednet.js --on",
+    "led:off": "node lednet.js --off",
+    "led:rgb": "node lednet.js --rgb",
+    "scan": "node lednet.js --discover-all"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3"
+  },
+  "dependencies": {
+    "@abandonware/noble": "1.9.2-20",
+    "minimist": "^1.2.8"
+  }
+}
