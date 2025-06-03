@@ -124,3 +124,15 @@ If you experience connection problems:
 4. Run `npm run scan` to find available devices
 5. Some platforms may require running with administrator privileges
 6. If the code can't find the needed services, run with the `--discover-all` option to view all available services
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+
+Copyright (C) 2025 Alexander Demin
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+**Author:** Alexander Demin  
+**Email:** bouvens@gmail.com  
+**Website:** https://bouvens.github.io/
