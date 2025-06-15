@@ -126,14 +126,33 @@ function loadConfig() {
 function parseConfig(argv, config) {
   const wantedId = (argv.id || config.device?.id)?.toLowerCase();
   const wantedName = (argv.name || config.device?.name)?.toLowerCase();
-  const mode = argv.off ? 'off' : argv.rgb !== undefined ? 'rgb' : 'on';
+  
+  const operations = [];
+  
+  // Handle RGB color setting (device auto-turns on when color is set)
+  if (argv.rgb !== undefined) {
+    const defaultRgb = config.defaults?.rgb || DEFAULT_CONFIG.defaults.rgb;
+    const [red, green, blue] = (argv.rgb || defaultRgb)
+      .split(',')
+      .map((value) => Number(value) & PROTOCOL.SEQUENCE_MASK);
+    
+    operations.push({ type: 'rgb', red, green, blue });
+  } else if (argv.on) {
+    // Just turn on if only --on specified
+    operations.push({ type: 'power', on: true });
+  }
+  
+  // Handle power off (comes after RGB if both specified)
+  if (argv.off) {
+    operations.push({ type: 'power', on: false });
+  }
+  
+  // If no operations specified, default to power on
+  if (operations.length === 0) {
+    operations.push({ type: 'power', on: true });
+  }
 
-  const defaultRgb = config.defaults?.rgb || DEFAULT_CONFIG.defaults.rgb;
-  const [red, green, blue] = (argv.rgb || defaultRgb)
-    .split(',')
-    .map((value) => Number(value) & PROTOCOL.SEQUENCE_MASK);
-
-  return { wantedId, wantedName, mode, red, green, blue };
+  return { wantedId, wantedName, operations };
 }
 
 function validateDevice(wantedId, wantedName, discoverAll) {
@@ -168,7 +187,6 @@ async function enableNotifications(rxCharacteristic) {
   if (rxCharacteristic) {
     try {
       await rxCharacteristic.subscribeAsync();
-      console.log('📢 Notifications enabled');
     } catch (error) {
       console.warn('⚠️ subscribeAsync error:', error?.message || error);
     }
@@ -216,23 +234,28 @@ const buildRgbPacket = (r, g, b) =>
     PROTOCOL.RGB_CHECKSUM_BASE
   );
 
-function buildPacket(mode, red, green, blue) {
-  if (mode === 'off') {
-    return buildPowerPacket(false);
+function buildPacket(operation) {
+  if (operation.type === 'power') {
+    return buildPowerPacket(operation.on);
   }
-  if (mode === 'rgb') {
-    return buildRgbPacket(red, green, blue);
+  if (operation.type === 'rgb') {
+    return buildRgbPacket(operation.red, operation.green, operation.blue);
   }
-  return buildPowerPacket(true);
+  throw new Error(`Unknown operation type: ${operation.type}`);
 }
 
-async function sendPacket(characteristic, mode, red, green, blue) {
-  const packet = buildPacket(mode, red, green, blue);
+async function sendPacket(characteristic, operation) {
+  const packet = buildPacket(operation);
   await characteristic.writeAsync(packet, false);
-  console.log(`📤 Sent ${mode.toUpperCase()} (${packet.toString('hex')})`);
+  
+  if (operation.type === 'power') {
+    console.log(`📤 Sent POWER ${operation.on ? 'ON' : 'OFF'} (${packet.toString('hex')})`);
+  } else if (operation.type === 'rgb') {
+    console.log(`📤 Sent RGB (${operation.red},${operation.green},${operation.blue}) (${packet.toString('hex')})`);
+  }
 }
 
-async function connectAndExecute(peripheral, config, mode, red, green, blue) {
+async function connectAndExecute(peripheral, config, operations) {
   console.log(`🔗 Connecting to ${peripheral.advertisement.localName || peripheral.id}…`);
   
   try {
@@ -257,7 +280,10 @@ async function connectAndExecute(peripheral, config, mode, red, green, blue) {
   }
 
   await enableNotifications(rxCharacteristic);
-  await sendPacket(txCharacteristic, mode, red, green, blue);
+  
+  for (const operation of operations) {
+    await sendPacket(txCharacteristic, operation);
+  }
 
   await peripheral.disconnectAsync();
   console.log('✅ Done');
@@ -269,13 +295,14 @@ function main() {
   const argv = minimist(process.argv.slice(2), {
     string: ['id', 'name', 'rgb'],
     boolean: ['on', 'off', 'help', 'discover-all'],
-    alias: { h: 'help' },
+    alias: { h: 'help', d: 'discover-all' },
   });
 
   if (argv.help) {
     console.log(`Usage:
   node lednet.js --on | --off | --rgb R,G,B
-  node lednet.js --discover-all      (scan all devices)
+  node lednet.js --on --rgb R,G,B      (turn on and set color)
+  node lednet.js --discover-all        (scan all devices)
   
   Device can be specified via command line or config.json:
     --id <device-id>     Exact device ID (from scan)
@@ -284,13 +311,15 @@ function main() {
   Examples:
     node lednet.js --name LEDnetWF --on
     node lednet.js --id abc123...def --rgb 255,0,0
+    node lednet.js --name LEDnetWF --on --rgb 0,255,0  (turn on + green)
     
+  Note: When --rgb is specified, the device is automatically turned on first.
   Device configuration is read from config.json file if present.`);
     process.exit(0);
   }
 
   const config = loadConfig();
-  const { wantedId, wantedName, mode, red, green, blue } = parseConfig(argv, config);
+  const { wantedId, wantedName, operations } = parseConfig(argv, config);
   validateDevice(wantedId, wantedName, argv['discover-all']);
 
   console.log('🔍 Scanning for Bluetooth Low Energy devices…');
@@ -334,7 +363,7 @@ function main() {
     clearTimeout(bailout);
     noble.stopScanning();
 
-    await connectAndExecute(peripheral, config, mode, red, green, blue);
+    await connectAndExecute(peripheral, config, operations);
   });
 
   if (argv['discover-all']) {
@@ -348,5 +377,4 @@ function main() {
   process.on('SIGINT', () => process.exit(0));
 }
 
-// Start the application
 main();

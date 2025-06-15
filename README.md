@@ -60,6 +60,8 @@ This will list all BLE devices. Look for your LED controller and copy its ID to 
 
 ### Basic Commands
 
+All commands use `config.json` if present or command line arguments.
+
 ```bash
 # Turn on LED strip
 npm run led:on
@@ -67,11 +69,17 @@ npm run led:on
 # Turn off LED strip  
 npm run led:off
 
-# Set RGB color (uses values from config or command line)
+# Set RGB color (uses config.json)
 npm run led:rgb
 
-# Set custom RGB color
+# Set custom RGB color with command line (device automatically turns on)
 npm run led:rgb -- 255,128,0
+
+# Set color with device name (case-insensitive)
+node lednet.js --name LEDnetWF --rgb 0,255,0
+
+# Set color and turn off (color persists for next power on)
+node lednet.js --name LEDnetWF --rgb 255,0,0 --off
 
 # Scan for devices
 npm run scan
@@ -88,8 +96,8 @@ node lednet.js --id DEVICE_ID --on
 # Override device name
 node lednet.js --name "My LED" --off
 
-# Set custom RGB color
-node lednet.js --rgb 255,0,0
+# Set custom RGB color (device turns on automatically)
+node lednet.js --name "My LED" --rgb 255,0,0
 ```
 
 ## Help
@@ -97,6 +105,17 @@ node lednet.js --rgb 255,0,0
 ```bash
 node lednet.js --help
 ```
+
+Available options:
+- `--on` - Turn the LED strip on
+- `--off` - Turn the LED strip off  
+- `--rgb R,G,B` - Set RGB color (0-255 for each component, device turns on automatically)
+- `--rgb R,G,B --off` - Set RGB color, then turn off (color persists)
+- `--id <device-id>` - Specify exact device ID
+- `--name <substring>` - Match device name (case-insensitive)
+- `--discover-all` - Scan and list all Bluetooth devices
+
+**Note:** The `--rgb` command automatically turns on the device. When combined with `--off`, the sequence is: set color → turn off.
 
 ## Protocol
 
@@ -112,6 +131,9 @@ The project implements a communication protocol for LEDnetWF V5 type LED strip c
 - Device ID can be found by running `npm run scan`
 - Configuration is read from `config.json` if present
 - Command line arguments override config file values
+- The `--rgb` command automatically turns on the device before setting color
+- RGB color settings persist in device memory between power cycles
+- Operations are executed sequentially with 100ms delays between them
 - Stable operation requires direct Bluetooth visibility
 
 ## Troubleshooting
