@@ -45,18 +45,27 @@
  * Notifications on characteristic FF02 are optional. On macOS they need to be
  * enabled via `subscribeAsync()` (internally calls `setNotifyValue:`).
  *
- * Command‑line interface
- * ----------------------
- *   --on / --off                turn the strip on or off
- *   --rgb R,G,B                 set a solid RGB colour (0‑255)
- *   --id <peripheralId>         exact UUID reported by scan‑once.js
- *   --name <substring>          substring of the advertised localName (case‑insensitive)
- *   --discover-all              scan only and list every detected device
- *
  * Configuration is read from config.json when available.
  *
  * Tested with Node 20, macOS 15.5, noble @abandonware 1.9.2‑20.
  */
+
+const USAGE_HELP = `Usage:
+  node lednet.js --on | --off | --rgb R,G,B
+  node lednet.js --rgb R,G,B --off     (set color then turn off)
+  node lednet.js -d | --discover-all   (scan all devices)
+  
+  Device can be specified via command line or config.json:
+    --id <device-id>     Exact device ID (from scan)
+    --name <substring>   Device name substring (case-insensitive)
+  
+  Examples:
+    node lednet.js --name LEDnetWF --on
+    node lednet.js --id abc123...def --rgb 255,0,0
+    node lednet.js --name LEDnetWF --rgb 0,255,0 --off
+    
+  Note: RGB command automatically turns on the device.
+  Device configuration is read from config.json file if present.`;
 
 import noble from '@abandonware/noble';
 import minimist from 'minimist';
@@ -299,22 +308,7 @@ function main() {
   });
 
   if (argv.help) {
-    console.log(`Usage:
-  node lednet.js --on | --off | --rgb R,G,B
-  node lednet.js --on --rgb R,G,B      (turn on and set color)
-  node lednet.js --discover-all        (scan all devices)
-  
-  Device can be specified via command line or config.json:
-    --id <device-id>     Exact device ID (from scan)
-    --name <substring>   Device name substring (case-insensitive)
-  
-  Examples:
-    node lednet.js --name LEDnetWF --on
-    node lednet.js --id abc123...def --rgb 255,0,0
-    node lednet.js --name LEDnetWF --on --rgb 0,255,0  (turn on + green)
-    
-  Note: When --rgb is specified, the device is automatically turned on first.
-  Device configuration is read from config.json file if present.`);
+    console.log(USAGE_HELP);
     process.exit(0);
   }
 

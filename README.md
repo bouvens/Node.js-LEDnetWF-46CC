@@ -19,6 +19,16 @@ cd led-strip
 npm install
 ```
 
+## Finding Your Device
+
+First, scan for available devices to find your device ID:
+
+```bash
+npm run scan
+```
+
+This will list all BLE devices. Look for your LED controller and copy its ID to the config file.
+
 ## Configuration
 
 1. Copy the example configuration file:
@@ -26,7 +36,7 @@ npm install
 cp config.example.json config.json
 ```
 
-2. Edit `config.json` with your device settings:
+2. Edit `config.json` with your device settings. All settings are optional.
 ```json
 {
   "device": {
@@ -44,17 +54,7 @@ cp config.example.json config.json
 }
 ```
 
-**Important:** The `config.json` file is ignored by git. Make sure to configure it locally on each system.
-
-## Finding Your Device
-
-First, scan for available devices to find your device ID:
-
-```bash
-npm run scan
-```
-
-This will list all BLE devices. Look for your LED controller and copy its ID to the config file.
+**Important:** The `config.json` file is ignored by git.
 
 ## Usage
 
@@ -83,11 +83,12 @@ node lednet.js --name LEDnetWF --rgb 255,0,0 --off
 
 # Scan for devices
 npm run scan
+# or use short form: node lednet.js -d
 ```
 
 ### Manual Control
 
-You can still override config values via command line:
+You can override config values via command line:
 
 ```bash
 # Override device ID
@@ -113,7 +114,7 @@ Available options:
 - `--rgb R,G,B --off` - Set RGB color, then turn off (color persists)
 - `--id <device-id>` - Specify exact device ID
 - `--name <substring>` - Match device name (case-insensitive)
-- `--discover-all` - Scan and list all Bluetooth devices
+- `--discover-all` or `-d` - Scan and list all Bluetooth devices
 
 **Note:** The `--rgb` command automatically turns on the device. When combined with `--off`, the sequence is: set color → turn off.
 
