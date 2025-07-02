@@ -1,6 +1,6 @@
 # LED Strip Controller
 
-Control LEDnetWF LED strip controller via Bluetooth LE using Node.js.
+Control LEDnetWF LED strip controller via Bluetooth LE using Node.js with full protocol support including effects, timers, and candle mode.
 
 ## Requirements
 
@@ -27,32 +27,19 @@ First, scan for available devices to find your device ID:
 npm run scan
 ```
 
-This will list all BLE devices. Look for your LED controller and copy its ID to the config file.
+This will list all BLE devices. Look for your LED controller and copy its ID to the config file on the next step.
 
 ## Configuration
 
 1. Copy the example configuration file:
+
 ```bash
 cp config.example.json config.json
 ```
 
-2. Edit `config.json` with your device settings. All settings are optional.
-```json
-{
-  "device": {
-    "id": "your-device-id-here",    // Device ID from scan
-    "name": "LEDnetWF"              // Device name (or part of it)
-  },
-  "ble": {
-    "service_uuid": "ffe5",         // BLE service UUID (optional)
-    "tx_char_uuid": "ff01",         // TX characteristic UUID (optional)
-    "rx_char_uuid": "ff02"          // RX characteristic UUID (optional)
-  },
-  "defaults": {
-    "rgb": "255,0,0"                // Default color (red,green,blue 0-255)
-  }
-}
-```
+2. Edit `config.json` with your device settings and optional default alarms.
+
+All settings are optional.
 
 **Important:** The `config.json` file is ignored by git.
 
@@ -60,93 +47,167 @@ cp config.example.json config.json
 
 ### Basic Commands
 
-All commands use `config.json` if present or command line arguments.
-
 ```bash
-# Turn on LED strip
+# Power control
 npm run led:on
-
-# Turn off LED strip  
 npm run led:off
 
-# Set RGB color (uses config.json)
-npm run led:rgb
+# RGB colors (automatically turns device on)
+npm run led:rgb                    # Uses config.json default
+npm run led:rgb -- 255,128,0       # Custom color
+node lednet.js --name LEDnetWF --rgb 255,0,0 --off  # Set color then turn off
 
-# Set custom RGB color with command line (device automatically turns on)
-npm run led:rgb -- 255,128,0
-
-# Set color with device name (case-insensitive)
-node lednet.js --name LEDnetWF --rgb 0,255,0
-
-# Set color and turn off (color persists for next power on)
-node lednet.js --name LEDnetWF --rgb 255,0,0 --off
-
-# Scan for devices
+# Device scanning
 npm run scan
-# or use short form: node lednet.js -d
 ```
 
-### Manual Control
+### Effects
 
-You can override config values via command line:
+Built-in effects with configurable speed and brightness (automatically turns device on):
 
 ```bash
-# Override device ID
-node lednet.js --id DEVICE_ID --on
+# Using npm scripts
+npm run led:effect -- fade7 --speed 80 --brightness 70
+npm run led:effect -- strobe7 --speed 30 --brightness 100
 
-# Override device name
-node lednet.js --name "My LED" --off
-
-# Set custom RGB color (device turns on automatically)
-node lednet.js --name "My LED" --rgb 255,0,0
+# Direct command line
+node lednet.js --name LEDnetWF --effect redgreen --brightness 60
 ```
 
-## Help
+**Available effects:**
+
+- **Cross fade:** `fade7`, `red`, `green`, `blue`, `yellow`, `cyan`, `purple`, `white`
+- **Cross fade colors:** `redgreen`, `redblue`, `greenblue`
+- **Strobe:** `strobe7`, `redstrobe`, `greenstrobe`, `bluestrobe`, `yellowstrobe`, `cyanstrobe`, `purplestrobe`, `whitestrobe`
+- **Jump:** `jump7`
+- **Custom colors:** Any effect can use custom colors with `effect:R,G,B` format
+
+### Candle Mode
+
+Simulate flickering candle effect:
 
 ```bash
-node lednet.js --help
+npm run led:candle -- --amplitude 2 --speed 60 --brightness 80
+node lednet.js --name LEDnetWF --candle --amplitude 1 --speed 50 --brightness 70
 ```
 
-Available options:
-- `--on` - Turn the LED strip on
-- `--off` - Turn the LED strip off  
-- `--rgb R,G,B` - Set RGB color (0-255 for each component, device turns on automatically)
-- `--rgb R,G,B --off` - Set RGB color, then turn off (color persists)
-- `--id <device-id>` - Specify exact device ID
-- `--name <substring>` - Match device name (case-insensitive)
-- `--discover-all` or `-d` - Scan and list all Bluetooth devices
+Parameters:
 
-**Note:** The `--rgb` command automatically turns on the device. When combined with `--off`, the sequence is: set color → turn off.
+- `--amplitude 0-2` - Flicker intensity (0=low, 1=medium, 2=high)
+- `--speed 1-100` - Flicker speed percentage
+- `--brightness 1-100` - Overall brightness percentage
+
+### Alarm System
+
+Set scheduled actions with format: `HH:MM[,params][/days][#brightness][%speed]`
+
+```bash
+# Basic power alarms
+npm run led:alarm-on -- "21:00"                    # Daily at 21:00
+npm run led:alarm-off -- "23:30/0011111"           # Weekdays at 23:30
+
+# RGB alarms (automatically turns device on)
+npm run led:alarm-rgb -- "20:00,255,128,0#80"      # Orange at 20:00, 80% brightness
+
+# Effect alarms (automatically turns device on)
+npm run led:alarm-effect -- "19:00,strobe7%30#90"   # Strobe at 30% speed, 90% brightness
+npm run led:alarm-effect -- "19:30,fade7:0,255,0%40#90"     # Green fade effect, 40% speed, 90% brightness
+
+# Multiple alarms
+node lednet.js --name LEDnetWF --alarm-on "07:00/0011111#100;09:00/1100000#60"
+node lednet.js --name LEDnetWF --alarm-rgb "20:00,255,0,0;21:00,0,255,0;22:00,0,0,255"
+
+# One-time alarms (auto-delete after trigger)
+node lednet.js --name LEDnetWF --alarm-on "08:00/once"
+
+# Clear alarms
+npm run led:alarm-clear -- all
+npm run led:alarm-clear -- basic     # Clear only power on/off alarms
+npm run led:alarm-clear -- effect    # Clear only RGB/effect alarms
+```
+
+**Days mask formats:**
+
+- `/0011111` - Binary: weekdays (Mon-Fri)
+- `/1100000` - Binary: weekends (Sat-Sun)
+- `/1111111` - Binary: daily (default)
+- `/once` - One-time only
+
+Binary mask bit order: `[Once][Sun][Sat][Fri][Thu][Wed][Tue][Mon]`
+
+### Time Synchronization
+
+```bash
+# Sync device clock and apply config alarms
+npm run led:sync
+node lednet.js --name LEDnetWF --time-sync
+```
+
+**Note:** Time sync automatically applies default alarms from `config.json` if present. Alarm operations automatically sync time before setting schedule.
+
+## Command Line Options
+
+```bash
+node lednet.js [options]
+
+Power:
+  --on                    Turn device on
+  --off                   Turn device off
+
+Colors & Effects:
+  --rgb R,G,B             Set RGB color (0-255, auto-turns on)
+  --effect <name>         Set effect (see available effects above)
+  --candle                Enable candle mode
+  --speed N               Effect/candle speed 1-100% (default: 50)
+  --brightness N          Effect/candle brightness 1-100% (default: 100)
+  --amplitude N           Candle amplitude 0-2 (default: 1)
+
+Alarms (format: HH:MM[,params][/days][#brightness][%speed]):
+  --alarm-on <format>     Power ON alarm(s)
+  --alarm-off <format>    Power OFF alarm(s)
+  --alarm-rgb <format>    RGB color alarm(s)
+  --alarm-effect <format> Effect alarm(s) - available: fade7, strobe7, jump7, red, green, blue, 
+                          yellow, cyan, purple, white, redgreen, redblue, greenblue, redstrobe, 
+                          greenstrobe, bluestrobe, yellowstrobe, cyanstrobe, purplestrobe, 
+                          whitestrobe. Any effect supports custom colors with effect:R,G,B format
+  --alarm-clear <type>    Clear alarms (basic/effect/all, default: all)
+
+Time & Device:
+  --time-sync             Sync device clock (applies config alarms)
+  --id <device-id>        Exact device ID
+  --name <substring>      Device name match (case-insensitive)
+  --discover-all, -d      Scan all devices
+
+Help:
+  --help, -h              Show help
+```
 
 ## Protocol
 
-The project implements a communication protocol for LEDnetWF V5 type LED strip controllers:
+The project implements the communication protocol for LEDnetWF V5 LED strip controllers based on reverse engineering:
 
-- Initialization: INIT-A (12B), INIT-B (20B)
-- Subscribe to notifications (FF02)
-- Send WAKE packets (2 × 22B)
-- Commands: ON/OFF (21B) or RGB (16B)
+- Basic control: Power ON/OFF, static RGB colors
+- Effects: 20+ built-in dynamic effects with speed/brightness control
+- Candle mode: Realistic candle flickering simulation
+- Alarms: Automatic daily/weekly ON/OFF scheduling with RGB and effects
+- Time sync: Device clock synchronization
+- All packets use proper checksums and sequence numbering
 
-## Notes
+### Not Yet Implemented
 
-- Device ID can be found by running `npm run scan`
-- Configuration is read from `config.json` if present
-- Command line arguments override config file values
-- The `--rgb` command automatically turns on the device before setting color
-- RGB color settings persist in device memory between power cycles
-- Operations are executed sequentially with 100ms delays between them
-- Stable operation requires direct Bluetooth visibility
+- **Microphone mode (MIC)**: Built-in microphone for music-reactive lighting effects
+- **Music integration**: Bluetooth audio streaming and music synchronization
+- **Custom patterns**: User-defined color sequences and animations
+- **LED strip configuration**: Setting the number of LEDs and segments
 
 ## Troubleshooting
 
 If you experience connection problems:
 
-1. Make sure Bluetooth is enabled on your computer
-2. Check that the device is turned on and within range
-3. Verify the device ID or name is correct in `config.json`
-4. Run `npm run scan` to find available devices
-5. Some platforms may require running with administrator privileges
-6. If the code can't find the needed services, run with the `--discover-all` option to view all available services
+1. Make sure Bluetooth is enabled and device is in range
+2. Verify device ID/name in `config.json` or use `npm run scan`
+3. Some platforms may require administrator privileges
+4. Use `--discover-all` to view all available services if needed
 
 ## License
 
@@ -156,6 +217,6 @@ Copyright (C) 2025 Alexander Demin
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
-**Author:** Alexander Demin  
-**Email:** bouvens@gmail.com  
+**Author:** Alexander Demin
+**Email:** bouvens@gmail.com
 **Website:** https://bouvens.github.io/

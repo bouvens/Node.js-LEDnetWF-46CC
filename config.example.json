@@ -3,12 +3,13 @@
     "id": "your-device-id-here",
     "name": "LEDnetWF"
   },
-  "ble": {
-    "service_uuid": "ffe5",
-    "tx_char_uuid": "ff01",
-    "rx_char_uuid": "ff02"
-  },
   "defaults": {
-    "rgb": "255,0,0"
+    "rgb": "255,0,0",
+    "alarms": {
+      "alarm-on": "07:00/0011111#100;09:00/1100000#60",
+      "alarm-off": "23:00/0011111;01:00/1100000",
+      "alarm-rgb": "20:00,255,200,100/1111111#80",
+      "alarm-effect": "22:30,fade7:255,100,0/0011111%20#30"
+    }
   }
 } 
