@@ -1,0 +1,189 @@
+{
+  "steps": [
+    {
+      "name": "static_color_red",
+      "description": "Static RGB (255,0,0)",
+      "packet": "00:05:80:00:00:0d:0e:0b:3b:a1:00:64:64:00:00:00:00:00:00:00:00",
+      "params": { "r": 255, "g": 0, "b": 0, "brightness": 100 }
+    },
+    {
+      "name": "sync_time",
+      "description": "Synchronise controller clock to 2025-07-02 13:23:58",
+      "packet": "00:01:80:00:00:04:05:0a:81:8a:8b:96",
+      "params": { "year": 2025, "month": 7, "day": 2, "hours": 13, "minutes": 23, "seconds": 58 }
+    },
+    {
+      "name": "wake_keepalive_17",
+      "description": "WAKE keep-alive packet (seq 0x17)",
+      "packet": "00:17:80:00:00:0d:0e:0b:3b:25:00:00:00:00:00:00:00:00:00:00:00:3d",
+      "params": {}
+    },
+    {
+      "name": "wake_keepalive_18",
+      "description": "WAKE keep-alive packet (seq 0x18)",
+      "packet": "00:18:80:00:00:0d:0e:0b:3b:25:00:00:00:00:00:00:00:00:00:00:00:3e",
+      "params": {}
+    },
+    {
+      "name": "power_on",
+      "description": "Turn strip ON (white)",
+      "packet": "00:19:80:00:00:0d:0e:0b:3b:23:00:00:00:00:00:00:00:00:00:00:3f",
+      "params": { "state": "on" }
+    },
+    {
+      "name": "power_off",
+      "description": "Turn strip OFF",
+      "packet": "00:1a:80:00:00:0d:0e:0b:3b:24:00:00:00:00:00:00:00:00:00:00:40",
+      "params": { "state": "off" }
+    },
+    {
+      "name": "static_color_green",
+      "description": "Static RGB (0,255,0)",
+      "packet": "00:1b:80:00:00:08:09:0b:31:00:ff:00:00:00:0f:53",
+      "params": { "r": 0, "g": 255, "b": 0, "brightness": 100 }
+    },
+    {
+      "name": "static_color_blue",
+      "description": "Static RGB (0,0,255)",
+      "packet": "00:1c:80:00:00:08:09:0b:31:00:00:ff:00:00:0f:54",
+      "params": { "r": 0, "g": 0, "b": 255, "brightness": 100 }
+    },
+    {
+      "name": "static_color_white",
+      "description": "Static RGB (255,255,255)",
+      "packet": "00:1d:80:00:00:08:09:0b:31:ff:ff:ff:00:00:0f:55",
+      "params": { "r": 255, "g": 255, "b": 255, "brightness": 100 }
+    },
+    {
+      "name": "add_alarm_on_everyday",
+      "description": "Daily power-ON alarm at 21:00",
+      "packet": "00:02:80:00:00:0c:0d:0b:10:14:19:07:04:0f:1c:05:05:00:0f:8c",
+      "params": { "time": "21:00", "repeat": "Mon-Sun", "enabled": true }
+    },
+    {
+      "name": "add_alarm_off_everyday",
+      "description": "Daily power-OFF alarm at 23:30",
+      "packet": "00:03:80:00:00:0c:0d:0b:10:14:19:07:04:0f:1c:07:05:00:0f:8e",
+      "params": { "time": "23:30", "repeat": "Mon-Sun", "enabled": true }
+    },
+    {
+      "name": "set_effect_seven_color_cross_fade_initial",
+      "description": "Effect 'Seven-color cross-fade', brightness 43%, speed 34% (seq 0x04)",
+      "packet": "00:04:80:00:00:05:06:0a:22:2a:2b:0f:86",
+      "params": { "effect_id": 56, "brightness_percent": 43, "speed_percent": 34 }
+    },
+    {
+      "name": "set_effect_seven_color_cross_fade_b16_s37",
+      "description": "Cross-fade: brightness 16%, speed 37% (seq 0x0d)",
+      "packet": "00:0d:80:00:00:05:06:0b:38:25:10:32:9f",
+      "params": { "effect_id": 56, "brightness_percent": 16, "speed_percent": 37 }
+    },
+    {
+      "name": "set_effect_seven_color_cross_fade_b73_s37",
+      "description": "Cross-fade: brightness 73%, speed 37% (seq 0x0e)",
+      "packet": "00:0e:80:00:00:05:06:0b:38:25:10:49:b6",
+      "params": { "effect_id": 56, "brightness_percent": 73, "speed_percent": 37 }
+    },
+    {
+      "name": "white_gradual_change",
+      "description": "White gradual change (effect ID 0x3f) — packet not captured yet",
+      "packet": "TODO",
+      "params": { "effect_id": 63 }
+    },
+    {
+      "name": "effect_red_green_cross_fade",
+      "description": "Red/green cross-fade (ID 0x40) — packet not captured yet",
+      "packet": "TODO",
+      "params": { "effect_id": 64 }
+    },
+    {
+      "name": "effect_seven_color_strobe_flash",
+      "description": "Seven-color strobe flash (ID 0x43) — packet not captured yet",
+      "packet": "TODO",
+      "params": { "effect_id": 67 }
+    },
+    {
+      "name": "effect_green_strobe_flash",
+      "description": "Green strobe flash (ID 0x45) — packet not captured yet",
+      "packet": "TODO",
+      "params": { "effect_id": 69 }
+    },
+    {
+      "name": "effect_seven_color_jumping_change",
+      "description": "Seven-color jumping change (ID 0x4c) — packet not captured yet",
+      "packet": "TODO",
+      "params": { "effect_id": 76 }
+    },
+    {
+      "name": "static_color_custom",
+      "description": "Static color RGB (49,255,76)",
+      "packet": "00:0c:80:00:00:08:09:0b:31:ff:4c:00:00:00:0f:8b",
+      "params": { "r": 49, "g": 255, "b": 76, "brightness": 100 }
+    },    {
+      "name": "candle_yellow_orange",
+      "description": "Candle mode: yellow-orange color",
+      "packet": "00:16:80:00:00:09:0a:0b:39:d1:c4:ff:00:1f:48:03:37",
+      "params": {
+        "mode": "candle",
+        "r": 196,
+        "g": 255,
+        "b": 0,
+        "inverted_speed": 31,
+        "brightness": 72,
+        "amplitude": 3
+      }
+    },
+    {
+      "name": "candle_purple",
+      "description": "Candle mode: purple color",
+      "packet": "00:17:80:00:00:09:0a:0b:39:d1:dd:00:ff:0b:1a:01:0c",
+      "params": {
+        "mode": "candle",
+        "r": 221,
+        "g": 0,
+        "b": 255,
+        "inverted_speed": 11,
+        "brightness": 26,
+        "amplitude": 1
+      }
+    },
+    {
+      "name": "candle_orange",
+      "description": "Candle mode: orange color",
+      "packet": "00:18:80:00:00:09:0a:0b:39:d1:ff:7b:00:1f:4b:03:f1",
+      "params": {
+        "mode": "candle",
+        "r": 255,
+        "g": 123,
+        "b": 0,
+        "inverted_speed": 31,
+        "brightness": 75,
+        "amplitude": 3
+      }
+    },
+    {
+      "name": "disable_alarm_off",
+      "description": "Disable the OFF alarm in slot 2",
+      "packet": "00:07:80:00:00:58:59:0b:21:f0:00:00:00:00:00:00:00:00:f0:0f",
+      "params": { "slot": 2, "enabled": false }
+    },
+    {
+      "name": "add_one_time_off_alarm",
+      "description": "One-shot OFF at 17:54 on 2025-07-02",
+      "packet": "00:08:80:00:00:58:59:0b:21:f0:19:07:02:15:12:36:00:00:f0:0f",
+      "params": { "time": "17:54", "date": "2025-07-02", "repeat": "once", "enabled": true }
+    },
+    {
+      "name": "color_alarm_blue_purple",
+      "description": "One-shot alarm 17:55 with RGB (85,85,255)",
+      "packet": "00:0d:80:00:00:58:59:0b:21:f0:19:07:02:11:37:00:00:55:55:ff:64:f0:0f",
+      "params": { "time": "17:55", "color": [85, 85, 255], "brightness": 100 }
+    },
+    {
+      "name": "effect_alarm_cyan_gradual_weekdays",
+      "description": "Week-day alarm 17:55, effect ID 10 (cyan gradual), speed 74%",
+      "packet": "00:0e:80:00:00:58:59:0b:21:0f:19:07:02:11:37:00:c0:0a:4a:64:00:f0:0f",
+      "params": { "time": "17:55", "repeat": "Mon-Fri", "effect_id": 10, "speed_percent": 74, "brightness": 100 }
+    }
+  ]
+}

@@ -87,13 +87,13 @@ node lednet.js --name LEDnetWF --effect redgreen --brightness 60
 Simulate flickering candle effect:
 
 ```bash
-npm run led:candle -- --amplitude 2 --speed 60 --brightness 80
-node lednet.js --name LEDnetWF --candle --amplitude 1 --speed 50 --brightness 70
+npm run led:candle -- --amplitude 3 --speed 60 --brightness 80
+node lednet.js --name LEDnetWF --candle --amplitude 2 --speed 50 --brightness 70
 ```
 
 Parameters:
 
-- `--amplitude 0-2` - Flicker intensity (0=low, 1=medium, 2=high)
+- `--amplitude 1-3` - Flicker intensity (1=low, 2=medium, 3=high)
 - `--speed 1-100` - Flicker speed percentage
 - `--brightness 1-100` - Overall brightness percentage
 
@@ -160,7 +160,7 @@ Colors & Effects:
   --candle                Enable candle mode
   --speed N               Effect/candle speed 1-100% (default: 50)
   --brightness N          Effect/candle brightness 1-100% (default: 100)
-  --amplitude N           Candle amplitude 0-2 (default: 1)
+  --amplitude N           Candle amplitude 1-3 (default: 2)
 
 Alarms (format: HH:MM[,params][/days][#brightness][%speed]):
   --alarm-on <format>     Power ON alarm(s)
@@ -208,6 +208,21 @@ If you experience connection problems:
 2. Verify device ID/name in `config.json` or use `npm run scan`
 3. Some platforms may require administrator privileges
 4. Use `--discover-all` to view all available services if needed
+
+## References
+
+| Model / Brand                                    | Notes                                                        | Source                              |
+| ------------------------------------------------ | ------------------------------------------------------------ | ----------------------------------- |
+| **YBCRG-RGBWW "Ring Light"**                     | Same headers & effect IDs; community RE effort.              | ([github.com][1])                   |
+| **Magic Home / Magic Hue Bluetooth controllers** | Use identical command set (apps in Play Store/App Store).    | ([play.google.com][2])              |
+| **HappyLighting / Triones bulbs**                | Confirmed compatible packets, discussed in IoT forums.       | ([discourse.mozilla.org][3])        |
+| **Generic Magic Home Wi-Fi+BLE RGBW boxes**      | Sold on Amazon/Walmart/eBay, fall back to the same BLE spec. | ([amazon.com][4], [walmart.com][5]) |
+
+[1]: https://github.com/8none1/zengge_lednetwf?utm_source=chatgpt.com "8none1/zengge_lednetwf - GitHub"
+[2]: https://play.google.com/store/apps/details?hl=en_US&id=com.zengge.blev2&utm_source=chatgpt.com "ZENGGE - Apps on Google Play"
+[3]: https://discourse.mozilla.org/t/wip-adapter-for-bluetooth-happylighting-triones-bulbs/49477?utm_source=chatgpt.com "[WIP] Adapter for Bluetooth \"HappyLighting\" / \"Triones\" bulbs"
+[4]: https://www.amazon.com/magic-home-led-controller/s?k=magic+home+led+controller&utm_source=chatgpt.com "Magic Home Led Controller - Amazon.com"
+[5]: https://www.walmart.com/c/kp/magic-home-wifi-led-controller?utm_source=chatgpt.com "Magic Home Wifi Led Controller - Walmart"
 
 ## License
 

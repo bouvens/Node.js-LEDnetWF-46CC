@@ -22,13 +22,13 @@
 
 /**
  * lednet.js – Control utility for the LEDnetWF V5 Bluetooth controller
- * Hardware batch 2023‑24, board label "46 CC", short‑packet firmware.
+ * Board label "46 CC", short-packet firmware.
  *
  * Packet format (maximum length 21 bytes)
  * ---------------------------------------
  *   00 | SEQ | HEADER | PAYLOAD | CHK
  *
- *   SEQ – monotonic counter (second byte, wraps 0‑255).
+ *   SEQ – monotonic counter (second byte, wraps 0-255).
  *   CHK – checksum value, calculated as:
  *          • Power ON/OFF frame (21 B):  CHK = (SEQ + 0x26) & 0xFF
  *          • RGB frame          (16 B):  CHK = (SEQ + 0x38) & 0xFF
@@ -47,7 +47,7 @@
  *
  * Configuration is read from config.json when available.
  *
- * Tested with Node 20, macOS 15.5, noble @abandonware 1.9.2‑20.
+ * Tested with Node 20, macOS 15.5, noble @abandonware 1.9.2-20.
  */
 
 const USAGE_HELP = `Usage:
@@ -80,8 +80,9 @@ const USAGE_HELP = `Usage:
     Jump: jump7
     
   Candle mode:
-    --candle             Enable candle effect
-    --amplitude N        Candle amplitude 0-2 (default: 1, 0=low, 1=medium, 2=high)
+    --candle             Enable candle effect (uses default RGB color from config)
+    --rgb R,G,B          Set custom RGB color for candle mode (0-255)
+    --amplitude N        Candle amplitude 1-3 (default: 2, 1=low, 2=medium, 3=high)
     --speed N            Candle speed 1-100% (default: 50)
     --brightness N       Candle brightness 1-100% (default: 100)
   
@@ -143,6 +144,8 @@ const USAGE_HELP = `Usage:
     # Basic usage
     node lednet.js --name LEDnetWF --on
     node lednet.js --name LEDnetWF --effect strobe7 --speed 80 --brightness 70
+    node lednet.js --name LEDnetWF --candle --amplitude 3 --speed 50 --brightness 100
+    node lednet.js --name LEDnetWF --candle --rgb 255,100,0 --amplitude 1 --speed 80
     
     # Simple alarms
     node lednet.js --name LEDnetWF --alarm-on "21:00"
@@ -182,12 +185,10 @@ const PROTOCOL_HEADERS = {
   RGB: '80 00 00 08 09 0B 31',
   TIME: '80 00 00 04 05 0A',
 
-  EFFECT: '80 00 00 05 06 0B',
-  CANDLE_LOW: '80 00 00 05 06 0A',    // Amplitude 0 (Low)
-  CANDLE_MEDIUM: '80 00 00 06 07 0B', // Amplitude 1 (Medium)
-  CANDLE_HIGH: '80 00 00 07 08 0C',   // Amplitude 2 (High)
-  BASIC_TIMER: '80 00 00 0C 0D 0B', // Basic alarm table (power on actions)
-  EFFECT_TIMER: '80 00 00 58 59 0B', // Effect alarm table (power off/RGB/effects)
+  EFFECT: '80 00 00 05 06 0A',
+  CANDLE: '80 00 00 09 0A 0B 39 D1',
+  BASIC_TIMER: '80 00 00 0C 0D 0B',
+  EFFECT_TIMER: '80 00 00 58 59 0B',
 };
 
 const PROTOCOL = {
@@ -202,14 +203,15 @@ const PROTOCOL = {
   SEQUENCE_MASK: 0xff,
 
   EFFECTS: {
-    SEVEN_COLOR_CROSS_FADE: 0x38,
-    RED_GRADUAL: 0x39,
-    GREEN_GRADUAL: 0x3a,
-    BLUE_GRADUAL: 0x3b,
-    YELLOW_GRADUAL: 0x3c,
-    CYAN_GRADUAL: 0x3d,
-    PURPLE_GRADUAL: 0x3e,
-    WHITE_GRADUAL: 0x3f,
+    SEVEN_COLOR_CROSS_FADE: 0x22, // From raw-packets.json
+    RED_GRADUAL: 0x23, // Estimated sequence
+    GREEN_GRADUAL: 0x24,
+    BLUE_GRADUAL: 0x25,
+    YELLOW_GRADUAL: 0x26,
+    PURPLE_GRADUAL: 0x27,
+    CYAN_GRADUAL: 0x2A, // From raw-packets.json effect_alarm  
+    WHITE_GRADUAL: 0x2B,
+    // Legacy IDs - may not work on newer firmware
     RED_GREEN_CROSS_FADE: 0x40,
     RED_BLUE_CROSS_FADE: 0x41,
     GREEN_BLUE_CROSS_FADE: 0x42,
@@ -228,7 +230,7 @@ const PROTOCOL = {
     POWER_ON: 0x01, // Turn on power (basic alarm table)
     POWER_OFF: 0xf0, // Turn off power
     RGB: 0x0f, // Static RGB color
-    // Effect IDs 0x38-0x4C are used directly from EFFECTS
+    // Effect IDs 0x22-0x2B and legacy 0x38-0x4C are used directly from EFFECTS
     // Note: CANDLE (0x0b) is not supported in alarms by firmware
   },
 };
@@ -312,6 +314,14 @@ function loadConfig() {
   } catch (error) {
     return DEFAULT_CONFIG;
   }
+}
+
+function parseRgbColor(rgbString, config) {
+  const defaultRgb = config.defaults?.rgb || DEFAULT_CONFIG.defaults.rgb;
+  const colorString = rgbString || defaultRgb;
+  return colorString
+    .split(',')
+    .map((value) => Number(value) & PROTOCOL.SEQUENCE_MASK);
 }
 
 function parseConfig(argv, config) {
@@ -582,8 +592,8 @@ function parseConfig(argv, config) {
       effectId = effectKey ? PROTOCOL.EFFECTS[effectKey] : null;
     }
 
-    if (!effectId) {
-      console.error(`❌ Unknown effect: ${argv.effect}`);
+    if (effectId === undefined) {
+      console.error(`❌ Effect not recognised or not yet mapped: ${argv.effect}`);
       console.error(
         'Available effects:',
         Object.keys(EFFECT_ALIASES).join(', '),
@@ -599,20 +609,19 @@ function parseConfig(argv, config) {
 
   // Handle candle mode
   if (argv.candle) {
-    const amplitude = clamp(argv.amplitude, 0, 2, 1);
+    const amplitude = clamp(argv.amplitude, 1, 3, 2);
     const speed = clamp(argv.speed, 1, 100, 50);
     const brightness = clamp(argv.brightness, 1, 100, 100);
+    
+    const [red, green, blue] = parseRgbColor(argv.rgb, config);
 
-    operations.push({ type: 'candle', amplitude, speed, brightness });
+    operations.push({ type: 'candle', amplitude, speed, brightness, red, green, blue });
   }
 
   // Handle RGB color setting (device auto-turns on when color is set)
-  if (argv.rgb !== undefined) {
-    const defaultRgb = config.defaults?.rgb || DEFAULT_CONFIG.defaults.rgb;
-    const [red, green, blue] = (argv.rgb || defaultRgb)
-      .split(',')
-      .map((value) => Number(value) & PROTOCOL.SEQUENCE_MASK);
-
+  // Skip RGB operation if --candle is specified (RGB color already handled for candle)
+  if (argv.rgb !== undefined && !argv.candle) {
+    const [red, green, blue] = parseRgbColor(argv.rgb, config);
     operations.push({ type: 'rgb', red, green, blue });
   } else if (argv.on) {
     // Just turn on if only --on specified
@@ -738,23 +747,32 @@ const buildTimePacket = (date = new Date()) => {
   const hh = date.getHours();
   const mm = date.getMinutes();
   const ss = date.getSeconds();
-  const payload = Buffer.from([hh, mm, ss]);
+  const payload = Buffer.from([hh | 0x80, mm | 0x80, ss | 0x80]);
   return buildPacketBase(HEADERS.TIME, payload, PROTOCOL.RGB_CHECKSUM_BASE);
 };
 
-const CANDLE_HEADERS = {
-  0: HEADERS.CANDLE_LOW,
-  1: HEADERS.CANDLE_MEDIUM, 
-  2: HEADERS.CANDLE_HIGH,
-};
-
-const buildCandlePacket = (amplitude = 1, speed = 50, brightness = 100) => {
-  const clampedAmplitude = clamp(amplitude, 0, 2);
+const buildCandlePacket = (amplitude = 2, speed = 50, brightness = 100, r = 255, g = 128, b = 0) => {
+  const clampedAmplitude = clamp(amplitude, 1, 3);
   const clampedSpeed = clamp(speed, 1, 100);
   const clampedBrightness = clamp(brightness, 1, 100);
+  const clampedR = clamp(r, 0, 255);
+  const clampedG = clamp(g, 0, 255);
+  const clampedB = clamp(b, 0, 255);
   
-  const header = CANDLE_HEADERS[clampedAmplitude] ?? HEADERS.CANDLE_MEDIUM;
-  const payload = Buffer.from([clampedAmplitude, clampedSpeed, clampedBrightness, 0x0F]);
+  const header = HEADERS.CANDLE;
+  
+  const speedByte = 101 - clampedSpeed;
+  const brightnessByte = clampedBrightness;
+  
+  const payload = Buffer.from([
+    clampedR,
+    clampedG,
+    clampedB,
+    speedByte,
+    brightnessByte,
+    clampedAmplitude,
+  ]);
+  
   return buildPacketBase(header, payload, PROTOCOL.RGB_CHECKSUM_BASE);
 };
 
@@ -857,6 +875,9 @@ function buildPacket(operation) {
       operation.amplitude,
       operation.speed,
       operation.brightness,
+      operation.red,
+      operation.green,
+      operation.blue,
     );
   }
   if (operation.type === 'basic-alarm') {
@@ -901,17 +922,8 @@ async function sendPacket(characteristic, operation) {
     console.log(
       `📤 Sent CANDLE amp:${operation.amplitude} speed:${
         operation.speed
-      }% brightness:${operation.brightness}% (${packet.toString('hex')})`,
+      }% brightness:${operation.brightness}% color:(${operation.red},${operation.green},${operation.blue}) (${packet.toString('hex')})`,
     );
-    
-    // Send RGB color packet after candle if custom color specified
-    if (operation.red !== undefined && operation.green !== undefined && operation.blue !== undefined) {
-      const rgbPacket = buildRgbPacket(operation.red, operation.green, operation.blue);
-      await characteristic.writeAsync(rgbPacket, false);
-      console.log(
-        `📤 Sent CANDLE COLOR (${operation.red},${operation.green},${operation.blue}) (${rgbPacket.toString('hex')})`,
-      );
-    }
   } else if (operation.type === 'basic-alarm') {
     console.log(
       `📤 Sent BASIC ALARM table with ${
