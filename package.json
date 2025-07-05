@@ -4,13 +4,15 @@
   "private": true,
   "scripts": {
     "led": "node lednet.js",
+    "led:scan": "node lednet.js --discover-all",
     "led:on": "node lednet.js --on",
     "led:off": "node lednet.js --off",
     "led:rgb": "node lednet.js --rgb",
     "scan": "node lednet.js --discover-all"
   },
   "devDependencies": {
-    "@types/node": "^22.15.3"
+    "@types/node": "^22.15.3",
+    "prettier": "^3.4.2"
   },
   "dependencies": {
     "@abandonware/noble": "1.9.2-20",

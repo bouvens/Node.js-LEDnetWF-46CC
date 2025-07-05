@@ -209,8 +209,8 @@ const PROTOCOL = {
     BLUE_GRADUAL: 0x25,
     YELLOW_GRADUAL: 0x26,
     PURPLE_GRADUAL: 0x27,
-    CYAN_GRADUAL: 0x2A, // From raw-packets.json effect_alarm  
-    WHITE_GRADUAL: 0x2B,
+    CYAN_GRADUAL: 0x2a, // From raw-packets.json effect_alarm
+    WHITE_GRADUAL: 0x2b,
     // Legacy IDs - may not work on newer firmware
     RED_GREEN_CROSS_FADE: 0x40,
     RED_BLUE_CROSS_FADE: 0x41,
@@ -342,20 +342,20 @@ function parseConfig(argv, config) {
       // First parse brightness and speed from the entire entry (before splitting by /)
       let brightness = 100;
       let speed = 50;
-      
+
       // Extract #brightness and %speed from anywhere in the entry
       const brightnessMatch = entry.match(/#(\d+)/);
       if (brightnessMatch) {
         brightness = clamp(parseInt(brightnessMatch[1]), 1, 100, 100);
         entry = entry.replace(/#\d+/, ''); // Remove from entry
       }
-      
+
       const speedMatch = entry.match(/%(\d+)/);
       if (speedMatch) {
         speed = clamp(parseInt(speedMatch[1]), 1, 100, 50);
         entry = entry.replace(/%\d+/, ''); // Remove from entry
       }
-      
+
       const [timeAndParams, ...modifiers] = entry.trim().split('/');
       const [time, ...params] = timeAndParams.split(',');
 
@@ -424,7 +424,8 @@ function parseConfig(argv, config) {
 
     // Clear alarms if requested
     if (argv['alarm-clear']) {
-      const clearType = argv['alarm-clear'] === true ? 'all' : argv['alarm-clear']; // Default to 'all' if just --alarm-clear flag
+      const clearType =
+        argv['alarm-clear'] === true ? 'all' : argv['alarm-clear']; // Default to 'all' if just --alarm-clear flag
       if (clearType === 'basic' || clearType === 'all') {
         operations.push({ type: 'basic-alarm', entries: [] });
       }
@@ -434,7 +435,8 @@ function parseConfig(argv, config) {
     }
 
     // Only process individual alarms if not clearing all
-    const clearType = argv['alarm-clear'] === true ? 'all' : argv['alarm-clear'];
+    const clearType =
+      argv['alarm-clear'] === true ? 'all' : argv['alarm-clear'];
     if (!argv['alarm-clear'] || clearType !== 'all') {
       // Power ON alarms
       if (argv['alarm-on']) {
@@ -502,7 +504,7 @@ function parseConfig(argv, config) {
           // Reconstruct effect parameter from potentially split parts
           const effectParam = entry.params.join(',').toLowerCase();
           const effectName = effectParam.split(':')[0]; // Split on colon for effect:params
-          
+
           if (!effectName) {
             console.error(
               `❌ Effect alarm needs effect_name parameter: ${argv['alarm-effect']}`,
@@ -513,12 +515,12 @@ function parseConfig(argv, config) {
           // Check if custom colors are specified and valid (effect:R,G,B format)
           if (effectParam.includes(':')) {
             const customParams = effectParam.split(':')[1].split(',');
-            
+
             if (customParams.length >= 3) {
               const red = clamp(parseInt(customParams[0], 10), 0, 255, 255);
               const green = clamp(parseInt(customParams[1], 10), 0, 255, 255);
               const blue = clamp(parseInt(customParams[2], 10), 0, 255, 255);
-              
+
               effectAlarms.push(
                 buildEffectAlarmEntry(
                   entry.repeatMask,
@@ -593,7 +595,9 @@ function parseConfig(argv, config) {
     }
 
     if (effectId === undefined) {
-      console.error(`❌ Effect not recognised or not yet mapped: ${argv.effect}`);
+      console.error(
+        `❌ Effect not recognised or not yet mapped: ${argv.effect}`,
+      );
       console.error(
         'Available effects:',
         Object.keys(EFFECT_ALIASES).join(', '),
@@ -612,10 +616,18 @@ function parseConfig(argv, config) {
     const amplitude = clamp(argv.amplitude, 1, 3, 2);
     const speed = clamp(argv.speed, 1, 100, 50);
     const brightness = clamp(argv.brightness, 1, 100, 100);
-    
+
     const [red, green, blue] = parseRgbColor(argv.rgb, config);
 
-    operations.push({ type: 'candle', amplitude, speed, brightness, red, green, blue });
+    operations.push({
+      type: 'candle',
+      amplitude,
+      speed,
+      brightness,
+      red,
+      green,
+      blue,
+    });
   }
 
   // Handle RGB color setting (device auto-turns on when color is set)
@@ -751,19 +763,26 @@ const buildTimePacket = (date = new Date()) => {
   return buildPacketBase(HEADERS.TIME, payload, PROTOCOL.RGB_CHECKSUM_BASE);
 };
 
-const buildCandlePacket = (amplitude = 2, speed = 50, brightness = 100, r = 255, g = 128, b = 0) => {
+const buildCandlePacket = (
+  amplitude = 2,
+  speed = 50,
+  brightness = 100,
+  r = 255,
+  g = 128,
+  b = 0,
+) => {
   const clampedAmplitude = clamp(amplitude, 1, 3);
   const clampedSpeed = clamp(speed, 1, 100);
   const clampedBrightness = clamp(brightness, 1, 100);
   const clampedR = clamp(r, 0, 255);
   const clampedG = clamp(g, 0, 255);
   const clampedB = clamp(b, 0, 255);
-  
+
   const header = HEADERS.CANDLE;
-  
+
   const speedByte = 101 - clampedSpeed;
   const brightnessByte = clampedBrightness;
-  
+
   const payload = Buffer.from([
     clampedR,
     clampedG,
@@ -772,7 +791,7 @@ const buildCandlePacket = (amplitude = 2, speed = 50, brightness = 100, r = 255,
     brightnessByte,
     clampedAmplitude,
   ]);
-  
+
   return buildPacketBase(header, payload, PROTOCOL.RGB_CHECKSUM_BASE);
 };
 
@@ -817,7 +836,7 @@ const buildEffectAlarmEntry = (
     entry[5] = clamp(params[1], 0, 255); // G
     entry[6] = clamp(params[2], 0, 255); // B
     entry[7] = clamp(params[3], 1, 100, 100); // brightness
-  } else if (actionType >= 0x38 && actionType <= 0x4C) {
+  } else if (actionType >= 0x38 && actionType <= 0x4c) {
     // Effect format: effectId, speed, brightness (no custom colors)
     entry[4] = clamp(params[0], 1, 100, 50); // speed
     entry[5] = clamp(params[1], 1, 100, 100); // brightness

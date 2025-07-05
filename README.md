@@ -24,7 +24,7 @@ npm install
 First, scan for available devices to find your device ID:
 
 ```bash
-npm run scan
+npm run led:scan
 ```
 
 This will list all BLE devices. Look for your LED controller and copy its ID to the config file on the next step.
@@ -48,6 +48,9 @@ All settings are optional.
 ### Basic Commands
 
 ```bash
+# Device scanning
+npm run led:scan
+
 # Power control
 npm run led:on
 npm run led:off
@@ -56,9 +59,6 @@ npm run led:off
 npm run led:rgb                    # Uses config.json default
 npm run led:rgb -- 255,128,0       # Custom color
 node lednet.js --name LEDnetWF --rgb 255,0,0 --off  # Set color then turn off
-
-# Device scanning
-npm run scan
 ```
 
 ### Effects
@@ -166,9 +166,9 @@ Alarms (format: HH:MM[,params][/days][#brightness][%speed]):
   --alarm-on <format>     Power ON alarm(s)
   --alarm-off <format>    Power OFF alarm(s)
   --alarm-rgb <format>    RGB color alarm(s)
-  --alarm-effect <format> Effect alarm(s) - available: fade7, strobe7, jump7, red, green, blue, 
-                          yellow, cyan, purple, white, redgreen, redblue, greenblue, redstrobe, 
-                          greenstrobe, bluestrobe, yellowstrobe, cyanstrobe, purplestrobe, 
+  --alarm-effect <format> Effect alarm(s) - available: fade7, strobe7, jump7, red, green, blue,
+                          yellow, cyan, purple, white, redgreen, redblue, greenblue, redstrobe,
+                          greenstrobe, bluestrobe, yellowstrobe, cyanstrobe, purplestrobe,
                           whitestrobe. Any effect supports custom colors with effect:R,G,B format
   --alarm-clear <type>    Clear alarms (basic/effect/all, default: all)
 
@@ -205,7 +205,7 @@ The project implements the communication protocol for LEDnetWF V5 LED strip cont
 If you experience connection problems:
 
 1. Make sure Bluetooth is enabled and device is in range
-2. Verify device ID/name in `config.json` or use `npm run scan`
+2. Verify device ID/name in `config.json` or use `npm run led:scan`
 3. Some platforms may require administrator privileges
 4. Use `--discover-all` to view all available services if needed
 
@@ -218,8 +218,9 @@ If you experience connection problems:
 | **HappyLighting / Triones bulbs**                | Confirmed compatible packets, discussed in IoT forums.       | ([discourse.mozilla.org][3])        |
 | **Generic Magic Home Wi-Fi+BLE RGBW boxes**      | Sold on Amazon/Walmart/eBay, fall back to the same BLE spec. | ([amazon.com][4], [walmart.com][5]) |
 
-[1]: https://github.com/8none1/zengge_lednetwf?utm_source=chatgpt.com "8none1/zengge_lednetwf - GitHub"
-[2]: https://play.google.com/store/apps/details?hl=en_US&id=com.zengge.blev2&utm_source=chatgpt.com "ZENGGE - Apps on Google Play"
+[1]: https://github.com/8none1/zengge_lednetwf?utm_source=chatgpt.com '8none1/zengge_lednetwf - GitHub'
+[2]: https://play.google.com/store/apps/details?hl=en_US&id=com.zengge.blev2&utm_source=chatgpt.com 'ZENGGE - Apps on Google Play'
+
 [3]: https://discourse.mozilla.org/t/wip-adapter-for-bluetooth-happylighting-triones-bulbs/49477?utm_source=chatgpt.com "[WIP] Adapter for Bluetooth \"HappyLighting\" / \"Triones\" bulbs"
 [4]: https://www.amazon.com/magic-home-led-controller/s?k=magic+home+led+controller&utm_source=chatgpt.com "Magic Home Led Controller - Amazon.com"
 [5]: https://www.walmart.com/c/kp/magic-home-wifi-led-controller?utm_source=chatgpt.com "Magic Home Wifi Led Controller - Walmart"
