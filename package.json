@@ -8,7 +8,17 @@
     "led:on": "node lednet.js --on",
     "led:off": "node lednet.js --off",
     "led:rgb": "node lednet.js --rgb",
-    "scan": "node lednet.js --discover-all"
+    "led:effect": "node lednet.js --effect",
+    "led:candle": "node lednet.js --candle",
+    "led:alarm-clear": "node lednet.js --alarm-clear",
+    "led:sync": "node lednet.js --time-sync",
+    "led:alarm-on": "node lednet.js --alarm-on",
+    "led:alarm-off": "node lednet.js --alarm-off",
+    "led:alarm-rgb": "node lednet.js --alarm-rgb",
+    "led:alarm-effect": "node lednet.js --alarm-effect",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "format:staged": "prettier --write --staged"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
