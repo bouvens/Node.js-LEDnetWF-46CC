@@ -18,9 +18,14 @@
 
 - `SEQ` - monotonic 8-bit counter, persisted between sessions.
 - `LEN` - payload length (1 byte).
-- `CHK` - simple additive checksum **of the payload only** (len bytes), _modulo 256_, plus a fixed bias that depends on the command family:
+- `CHK` - simple checksum calculated as **`(SEQ + bias) & 0xFF`** where bias depends on the command family:
   - Power / WAKE / timers -> `bias = 0x26`
   - RGB / Effects / Candle / Time -> `bias = 0x38`
+
+**Checksum Examples:**
+- Power ON seq 0x38: `(0x38 + 0x26) & 0xFF = 0x5E` ✅
+- RGB Green seq 0x1B: `(0x1B + 0x38) & 0xFF = 0x53` ✅
+- RGB Red seq 0x23: `(0x23 + 0x38) & 0xFF = 0x5B` (but packet shows 0x3F - needs verification)
 
 - The controller silently accepts wrong checksums, but we keep them valid for sanity.
 

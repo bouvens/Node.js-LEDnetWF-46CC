@@ -1,10 +1,10 @@
 {
   "steps": [
     {
-      "name": "static_color_red",
-      "description": "Static RGB (255,0,0)",
-      "packet": "00:05:80:00:00:0d:0e:0b:3b:a1:00:64:64:00:00:00:00:00:00:00:00",
-      "params": { "r": 255, "g": 0, "b": 0, "brightness": 100 }
+      "name": "static_color_red_23",
+      "description": "Static RGB (255,0,0) (seq 0x23)",
+      "packet": "00:23:80:00:00:08:09:0b:31:ff:00:00:00:00:0f:3f",
+      "params": { "r": 255, "g": 0, "b": 0, "brightness": 100, "seq": 35 }
     },
     {
       "name": "sync_time",
@@ -215,6 +215,24 @@
         "speed_percent": 74,
         "brightness": 100
       }
+    },
+    {
+      "name": "power_on_38",
+      "description": "Turn strip ON (seq 0x38, keeps previous colour)",
+      "packet": "00:38:80:00:00:0d:0e:0b:3b:23:00:00:00:00:00:00:00:00:00:00:5e",
+      "params": { "state": "on", "seq": 56 }
+    },
+    {
+      "name": "power_off_39",
+      "description": "Turn strip OFF (seq 0x39)",
+      "packet": "00:39:80:00:00:0d:0e:0b:3b:24:00:00:00:00:00:00:00:00:00:00:5f",
+      "params": { "state": "off", "seq": 57 }
+    },
+    {
+      "name": "static_color_pink",
+      "description": "Static RGB (255,0,255) - verified, seq 0x22",
+      "packet": "00:22:80:00:00:08:09:0b:31:ff:00:ff:00:00:0f:3e",
+      "params": { "r": 255, "g": 0, "b": 255, "brightness": 100, "seq": 34 }
     }
   ]
 }
