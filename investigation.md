@@ -55,7 +55,7 @@ Info: Treat these packets as **state synchronisation** performed by the mobile a
 | ----------------------- | -------------------- | ------------------------------------------ | -------- |
 | **`0D 0E 0B 3B`**       | Power ON / OFF       | `23/24 [10x00]` (21 B total)               | `0x26`   |
 | **`08 09 0B 31`**       | Static RGB           | `R G B 00 00 0F` (16 B)                    | `0x38`   |
-| **`05 06 0A`**          | Built-in Effect      | `ID speed brightness`                      | `0x38`   |
+| **`05 06 0B 38`**       | Built-in Effect      | `effectID timeout brightness` | `0x38`   |
 | **`09 0A 0B 39 D1`**    | Candle               | `R G B invertedSpeed brightness amplitude` | `0x38`   |
 | **`04 05 0A`**          | Time sync            | `hh mm ss` (BCD)                           | `0x38`   |
 | **`0C 0D 0B`**          | Basic timer (ON/OFF) | 8 B record x N                             | `0x26`   |
@@ -114,23 +114,23 @@ The controller stores **16 slots per table** and overwrites the oldest one when 
 
 | ID   | Label in ZENGGE app        | Family          | Alias in lednet.js |
 | ---- | -------------------------- | --------------- | ------------------ |
-| 0x22 | Seven-color cross fade     | Cross-fade      | fade7              |
-| 0x23 | Red gradual                | Cross-fade      | red                |
-| 0x24 | Green gradual              | Cross-fade      | green              |
-| 0x25 | Blue gradual               | Cross-fade      | blue               |
-| 0x26 | Yellow gradual             | Cross-fade      | yellow             |
-| 0x27 | Purple gradual             | Cross-fade      | purple             |
-| 0x2A | Cyan gradual               | Cross-fade      | cyan               |
-| 0x2B | White gradual              | Cross-fade      | white              |
-| 0x40 | Red/Green                  | Two-color cross | redgreen           |
-| 0x41 | Red/Blue                   | Two-color cross | redblue            |
-| 0x42 | Green/Blue                 | Two-color cross | greenblue          |
-| 0x43 | Seven-color strobe         | Strobe          | strobe7            |
-| 0x44 | Red strobe                 | Strobe          | redstrobe          |
-| 0x45 | Green strobe               | Strobe          | greenstrobe        |
-| 0x46 | Blue strobe                | Strobe          | bluestrobe         |
-| 0x47 | Yellow strobe              | Strobe          | yellowstrobe       |
-| 0x48 | Cyan strobe                | Strobe          | cyanstrobe         |
-| 0x49 | Purple strobe              | Strobe          | purplestrobe       |
-| 0x4A | White strobe               | Strobe          | whitestrobe        |
-| 0x4C | Seven-color jumping change | Jump            | jump7              |
+| 0x25 | Seven-color cross fade     | Cross-fade      | fade7              |
+| 0x26 | Red gradual                | Cross-fade      | red                |
+| 0x27 | Green gradual              | Cross-fade      | green              |
+| 0x28 | Blue gradual               | Cross-fade      | blue               |
+| 0x29 | Yellow gradual             | Cross-fade      | yellow             |
+| 0x2A | Purple gradual             | Cross-fade      | purple             |
+| 0x2B | Cyan gradual               | Cross-fade      | cyan               |
+| 0x2C | White gradual              | Cross-fade      | white              |
+| 0x2D | Red/Green                  | Two-color cross | redgreen           |
+| 0x2E | Red/Blue                   | Two-color cross | redblue            |
+| 0x2F | Green/Blue                 | Two-color cross | greenblue          |
+| 0x30 | Seven-color strobe         | Strobe          | strobe7            |
+| 0x31 | Red strobe                 | Strobe          | redstrobe          |
+| 0x32 | Green strobe               | Strobe          | greenstrobe        |
+| 0x33 | Blue strobe                | Strobe          | bluestrobe         |
+| 0x34 | Yellow strobe              | Strobe          | yellowstrobe       |
+| 0x35 | Cyan strobe                | Strobe          | cyanstrobe         |
+| 0x36 | Purple strobe              | Strobe          | purplestrobe       |
+| 0x37 | White strobe               | Strobe          | whitestrobe        |
+| 0x38 | Seven-color jumping change | Jump            | jump7              |

@@ -185,7 +185,7 @@ const PROTOCOL_HEADERS = {
   RGB: '80 00 00 08 09 0B 31',
   TIME: '80 00 00 04 05 0A',
 
-  EFFECT: '80 00 00 05 06 0A',
+  EFFECT: '80 00 00 05 06 0B 38',
   CANDLE: '80 00 00 09 0A 0B 39 D1',
   BASIC_TIMER: '80 00 00 0C 0D 0B',
   EFFECT_TIMER: '80 00 00 58 59 0B',
@@ -203,35 +203,32 @@ const PROTOCOL = {
   SEQUENCE_MASK: 0xff,
 
   EFFECTS: {
-    SEVEN_COLOR_CROSS_FADE: 0x22, // From raw-packets.json
-    RED_GRADUAL: 0x23, // Estimated sequence
-    GREEN_GRADUAL: 0x24,
-    BLUE_GRADUAL: 0x25,
-    YELLOW_GRADUAL: 0x26,
-    PURPLE_GRADUAL: 0x27,
-    CYAN_GRADUAL: 0x2a, // From raw-packets.json effect_alarm
-    WHITE_GRADUAL: 0x2b,
-    // Legacy IDs - may not work on newer firmware
-    RED_GREEN_CROSS_FADE: 0x40,
-    RED_BLUE_CROSS_FADE: 0x41,
-    GREEN_BLUE_CROSS_FADE: 0x42,
-    SEVEN_COLOR_STROBE: 0x43,
-    RED_STROBE: 0x44,
-    GREEN_STROBE: 0x45,
-    BLUE_STROBE: 0x46,
-    YELLOW_STROBE: 0x47,
-    CYAN_STROBE: 0x48,
-    PURPLE_STROBE: 0x49,
-    WHITE_STROBE: 0x4a,
-    SEVEN_COLOR_JUMPING: 0x4c,
+    SEVEN_COLOR_CROSS_FADE: 0x25,
+    RED_GRADUAL: 0x26,
+    GREEN_GRADUAL: 0x27,
+    BLUE_GRADUAL: 0x28,
+    YELLOW_GRADUAL: 0x29,
+    PURPLE_GRADUAL: 0x2a,
+    CYAN_GRADUAL: 0x2b,
+    WHITE_GRADUAL: 0x2c,
+    RED_GREEN_CROSS_FADE: 0x2d,
+    RED_BLUE_CROSS_FADE: 0x2e,
+    GREEN_BLUE_CROSS_FADE: 0x2f,
+    SEVEN_COLOR_STROBE: 0x30,
+    RED_STROBE: 0x31,
+    GREEN_STROBE: 0x32,
+    BLUE_STROBE: 0x33,
+    YELLOW_STROBE: 0x34,
+    CYAN_STROBE: 0x35,
+    PURPLE_STROBE: 0x36,
+    WHITE_STROBE: 0x37,
+    SEVEN_COLOR_JUMPING: 0x38,
   },
 
   ALARM_ACTIONS: {
-    POWER_ON: 0x01, // Turn on power (basic alarm table)
-    POWER_OFF: 0xf0, // Turn off power
-    RGB: 0x0f, // Static RGB color
-    // Effect IDs 0x22-0x2B and legacy 0x38-0x4C are used directly from EFFECTS
-    // Note: CANDLE (0x0b) is not supported in alarms by firmware
+    POWER_ON: 0x01,
+    POWER_OFF: 0xf0,
+    RGB: 0x0f,
   },
 };
 
@@ -674,7 +671,7 @@ function validateDevice(wantedId, wantedName, discoverAll) {
 const findService = (services) =>
   services.find((s) => s.uuid.startsWith(BLE.SERVICE_PATTERN)) || services[0];
 
-function findCharacteristics(characteristics, config) {
+function findCharacteristics(characteristics) {
   const txUuid = BLE.DEFAULT_TX_CHAR;
   const rxUuid = BLE.DEFAULT_RX_CHAR;
 
@@ -744,12 +741,12 @@ const buildRgbPacket = (r, g, b) =>
     PROTOCOL.RGB_CHECKSUM_BASE,
   );
 
-// Build effect packet with effect ID, speed (1-100) and brightness (1-100)
-const buildEffectPacket = (effectId, speed = 50, brightness = 100) => {
+// Build effect packet with effect ID, timeout and brightness
+const buildEffectPacket = (effectId, timeout, brightness) => {
   const payload = Buffer.from([
     effectId,
-    clamp(speed, 1, 100, 50),
-    clamp(brightness, 1, 100, 100),
+    timeout,
+    brightness,
   ]);
   return buildPacketBase(HEADERS.EFFECT, payload, PROTOCOL.RGB_CHECKSUM_BASE);
 };
@@ -958,7 +955,7 @@ async function sendPacket(characteristic, operation) {
   }
 }
 
-async function connectAndExecute(peripheral, config, operations) {
+async function connectAndExecute(peripheral, operations) {
   console.log(
     `🔗 Connecting to ${peripheral.advertisement.localName || peripheral.id}…`,
   );
@@ -981,7 +978,7 @@ async function connectAndExecute(peripheral, config, operations) {
     tx: txCharacteristic,
     rx: rxCharacteristic,
     txUuid,
-  } = findCharacteristics(characteristics, config);
+  } = findCharacteristics(characteristics);
 
   if (!txCharacteristic) {
     console.error(`❌ Characteristic ${txUuid.toUpperCase()} not found`);
@@ -1074,7 +1071,7 @@ function main() {
     clearTimeout(bailout);
     noble.stopScanning();
 
-    await connectAndExecute(peripheral, config, operations);
+    await connectAndExecute(peripheral, operations);
   });
 
   if (argv['discover-all']) {
