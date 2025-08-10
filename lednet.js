@@ -602,10 +602,12 @@ function parseConfig(argv, config) {
       process.exit(1);
     }
 
-    const speed = clamp(argv.speed, 1, 100, 50);
+    const speedPercent = clamp(argv.speed, 1, 100, 50);
+    const TIMEOUT_MAX = 50; // instead of the original 255
+    const timeout = Math.round(TIMEOUT_MAX - (speedPercent / 100) * TIMEOUT_MAX);
     const brightness = clamp(argv.brightness, 1, 100, 100);
 
-    operations.push({ type: 'effect', effectId, speed, brightness });
+    operations.push({ type: 'effect', effectId, timeout, brightness });
   }
 
   // Handle candle mode
@@ -741,7 +743,6 @@ const buildRgbPacket = (r, g, b) =>
     PROTOCOL.RGB_CHECKSUM_BASE,
   );
 
-// Build effect packet with effect ID, timeout and brightness
 const buildEffectPacket = (effectId, timeout, brightness) => {
   const payload = Buffer.from([
     effectId,
@@ -879,7 +880,7 @@ function buildPacket(operation) {
   if (operation.type === 'effect') {
     return buildEffectPacket(
       operation.effectId,
-      operation.speed,
+      operation.timeout,
       operation.brightness,
     );
   }
@@ -922,10 +923,9 @@ async function sendPacket(characteristic, operation) {
       }) (${packet.toString('hex')})`,
     );
   } else if (operation.type === 'effect') {
+    const speedPercent = Math.round(100 - (operation.timeout / 255) * 100);
     console.log(
-      `📤 Sent EFFECT ${operation.effectId} speed:${
-        operation.speed
-      }% brightness:${operation.brightness}% (${packet.toString('hex')})`,
+      `📤 Sent EFFECT ${operation.effectId} speed:${speedPercent}% brightness:${operation.brightness}% (${packet.toString('hex')})`,
     );
   } else if (operation.type === 'time') {
     const date = operation.date || new Date();

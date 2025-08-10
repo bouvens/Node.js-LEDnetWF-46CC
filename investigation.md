@@ -61,7 +61,12 @@ Info: Treat these packets as **state synchronisation** performed by the mobile a
 | **`0C 0D 0B`**          | Basic timer (ON/OFF) | 8 B record x N                             | `0x26`   |
 | **`58 59 0B`**          | RGB/Effect timer     | 16 B record x N                            | `0x26`   |
 
-### Effect IDs (0x22 - 0x4C)
+### Effect Protocol Update
+
+**Payload Structure:** `[effectID] [timeout] [brightness]` (3 bytes)
+- `effectID`: effect identifier (0x25 = seven-color cross-fade) 
+- `timeout`: animation speed control (0x00-0xFF, higher values = slower animation)
+- `brightness`: 0x00-0x64 (0-100%)
 
 _(Effect IDs listed in Appendix A for reference.)_
 
