@@ -485,10 +485,7 @@ function parseConfig(argv, config) {
               entry.hour,
               entry.minute,
               PROTOCOL.ALARM_ACTIONS.RGB,
-              r,
-              g,
-              b,
-              entry.brightness,
+              { r, g, b, brightness: entry.brightness },
             ),
           );
         });
@@ -524,10 +521,7 @@ function parseConfig(argv, config) {
                   entry.hour,
                   entry.minute,
                   PROTOCOL.ALARM_ACTIONS.RGB,
-                  red,
-                  green,
-                  blue,
-                  entry.brightness,
+                  { r: red, g: green, b: blue, brightness: entry.brightness },
                 ),
               );
               return; // Skip standard effect processing
@@ -553,8 +547,7 @@ function parseConfig(argv, config) {
               entry.hour,
               entry.minute,
               effectId,
-              entry.speed,
-              entry.brightness,
+              { speed: entry.speed, brightness: entry.brightness },
             ),
           );
         });
@@ -819,7 +812,7 @@ const buildEffectAlarmEntry = (
   hour,
   minute,
   actionType,
-  ...params
+  actionParams = {}
 ) => {
   const entry = Buffer.alloc(16, 0);
   entry[0] = dowMask; // Days of week mask
@@ -830,14 +823,16 @@ const buildEffectAlarmEntry = (
   // Fill parameters based on action type
   if (actionType === PROTOCOL.ALARM_ACTIONS.RGB) {
     // RGB format: type=0x0F, R, G, B, brightness
-    entry[4] = clamp(params[0], 0, 255); // R
-    entry[5] = clamp(params[1], 0, 255); // G
-    entry[6] = clamp(params[2], 0, 255); // B
-    entry[7] = clamp(params[3], 1, 100, 100); // brightness
+    const { r = 255, g = 255, b = 255, brightness = 100 } = actionParams;
+    entry[4] = clamp(r, 0, 255);
+    entry[5] = clamp(g, 0, 255);
+    entry[6] = clamp(b, 0, 255);
+    entry[7] = clamp(brightness, 1, 100);
   } else if (actionType >= 0x38 && actionType <= 0x4c) {
-    // Effect format: effectId, speed, brightness (no custom colors)
-    entry[4] = clamp(params[0], 1, 100, 50); // speed
-    entry[5] = clamp(params[1], 1, 100, 100); // brightness
+    const { speed = 50, brightness = 100 } = actionParams;
+    entry[4] = actionType; // effectId (same as actionType for effects)
+    entry[5] = clamp(speed, 1, 100);
+    entry[6] = clamp(brightness, 1, 100);
   }
 
   entry[15] = 0xf0; // End marker
