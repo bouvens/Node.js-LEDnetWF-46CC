@@ -87,12 +87,13 @@ node lednet.js --name LEDnetWF --effect redgreen --brightness 60
 Simulate flickering candle effect:
 
 ```bash
-npm run led:candle -- --amplitude 3 --speed 60 --brightness 80
+npm run led:candle -- --rgb 255,100,0 --amplitude 3 --speed 60 --brightness 80
 node lednet.js --name LEDnetWF --candle --amplitude 2 --speed 50 --brightness 70
 ```
 
 Parameters:
 
+- `--rgb R,G,B` - Base candle color (optional, uses config default if not specified)
 - `--amplitude 1-3` - Flicker intensity (1=low, 2=medium, 3=high)
 - `--speed 1-100` - Flicker speed percentage
 - `--brightness 1-100` - Overall brightness percentage
