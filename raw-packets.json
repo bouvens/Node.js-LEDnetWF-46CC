@@ -7,19 +7,6 @@
       "params": { "r": 255, "g": 0, "b": 0, "brightness": 100, "seq": 35 }
     },
     {
-      "name": "sync_time",
-      "description": "Synchronise controller clock to 2025-07-02 13:23:58",
-      "packet": "00:01:80:00:00:04:05:0a:81:8a:8b:96",
-      "params": {
-        "year": 2025,
-        "month": 7,
-        "day": 2,
-        "hours": 13,
-        "minutes": 23,
-        "seconds": 58
-      }
-    },
-    {
       "name": "wake_keepalive_17",
       "description": "WAKE keep-alive packet (seq 0x17)",
       "packet": "00:17:80:00:00:0d:0e:0b:3b:25:00:00:00:00:00:00:00:00:00:00:00:3d",
@@ -72,16 +59,6 @@
       "description": "Daily power-OFF alarm at 23:30",
       "packet": "00:03:80:00:00:0c:0d:0b:10:14:19:07:04:0f:1c:07:05:00:0f:8e",
       "params": { "time": "23:30", "repeat": "Mon-Sun", "enabled": true }
-    },
-    {
-      "name": "set_effect_seven_color_cross_fade_initial",
-      "description": "Effect 'Seven-color cross-fade', brightness 43%, speed 34% (seq 0x04)",
-      "packet": "00:04:80:00:00:05:06:0a:22:2a:2b:0f:86",
-      "params": {
-        "effect_id": 56,
-        "brightness_percent": 43,
-        "speed_percent": 34
-      }
     },
     {
       "name": "set_effect_seven_color_cross_fade_b16_s37",
@@ -233,6 +210,279 @@
       "description": "Static RGB (255,0,255) - verified, seq 0x22",
       "packet": "00:22:80:00:00:08:09:0b:31:ff:00:ff:00:00:0f:3e",
       "params": { "r": 255, "g": 0, "b": 255, "brightness": 100, "seq": 34 }
+    },
+    {
+      "name": "alarm_on_daily_17_57_basic",
+      "description": "Basic ON alarm at 17:57, repeat daily (0x7F)",
+      "packet": "TODO",
+      "params": {
+        "table": "basic",
+        "dowMask": "0x7F",
+        "time": "17:57",
+        "brightness": 100,
+        "speed": 0
+      }
+    },
+    {
+      "name": "alarm_rgb_once_16_58_2025_10_04",
+      "description": "One-time RGB alarm 16:58 at 2025-10-04, inferred from capture",
+      "packet": "(see ref)",
+      "params": {
+        "table": "effect",
+        "repeat": "once",
+        "date": "2025-10-04",
+        "time": "16:58",
+        "type": "rgb",
+        "r": 235,
+        "g": 190,
+        "b": 135,
+        "brightness": 92,
+        "brightness_guess": 97
+      },
+      "ref": "effect_table_09"
+    },
+    {
+      "name": "alarm_off_18_58_su_mo_tu",
+      "description": "Effect-table alarm: power OFF at 18:58, days Su+Mo+Tu (mask 0x43)",
+      "packet": "000680000058590b21f0000000113900fe0000000000f00f000000000000000000000000000f000000000000000000000000000f000000000000000000000000000f0000000000000000000000000000f084",
+      "params": {
+        "source": "csv:L57",
+        "table": "effect",
+        "dowMask": "0x43",
+        "time": "18:58",
+        "action": "power_off"
+      }
+    },
+    {
+      "name": "alarm_effect_yellow_strobe_19_05_tu_we_th_fr_sa",
+      "description": "Effect-table alarm: Yellow strobe (0x34) at 19:05, Tue-Sat (0x3E), speed 65%",
+      "packet": "000980000058590b21f0190a04103a000061ebbe8700f0f0000000113900fe0000000000f0f0000000123a008600000000000ff00000001305007c340b000000f00f000000000000000000000000000f0000000000000000000000000000f0bd",
+      "params": {
+        "source": "csv:L63",
+        "table": "effect",
+        "dowMask": "0x3E",
+        "time": "19:05",
+        "effect_id": "0x34",
+        "speed_percent": 65,
+        "brightness": 100
+      }
+    },
+    {
+      "name": "device_info_query_seq01",
+      "description": "Device status/settings query after connect (NOT time-sync)",
+      "packet": "00:01:80:00:00:04:05:0a:81:8a:8b:96",
+      "decode": {
+        "seq": 1,
+        "header": "80 00 00 04 05 0A",
+        "payload": "81 8A 8B",
+        "checksum": "96",
+        "calc": "sum(payload) & 0xFF = 0x96"
+      }
+    },
+    {
+      "name": "rtc_set_2025-10-04_16-55-33_seq02",
+      "description": "RTC clock set: 2025-10-04 16:55:33, DOW=6",
+      "packet": "00:02:80:00:00:0c:0d:0b:10:14:19:0a:04:10:37:21:06:00:0f:c8",
+      "decode": {
+        "seq": 2,
+        "header": "80 00 00 0C 0D 0B",
+        "payload": "10 14 19 0A 04 10 37 21 06 00 0F",
+        "checksum": "C8",
+        "calc": "sum(payload)&0xFF=0xC8",
+        "fields": {
+          "cmd": "10 14",
+          "YY": 25,
+          "MM": 10,
+          "DD": 4,
+          "HH": 16,
+          "MI": 55,
+          "SS": 33,
+          "DOW": 6,
+          "tail": "00 0F"
+        }
+      }
+    },
+    {
+      "name": "rtc_set_2025-10-04_16-55-34_seq03",
+      "description": "RTC clock set: 2025-10-04 16:55:34, DOW=6",
+      "packet": "00:03:80:00:00:0c:0d:0b:10:14:19:0a:04:10:37:22:06:00:0f:c9",
+      "decode": {
+        "seq": 3,
+        "header": "80 00 00 0C 0D 0B",
+        "payload": "10 14 19 0A 04 10 37 22 06 00 0F",
+        "checksum": "C9",
+        "calc": "sum(payload)&0xFF=0xC9",
+        "fields": {
+          "cmd": "10 14",
+          "YY": 25,
+          "MM": 10,
+          "DD": 4,
+          "HH": 16,
+          "MI": 55,
+          "SS": 34,
+          "DOW": 6,
+          "tail": "00 0F"
+        }
+      }
+    },
+    {
+      "name": "vendor_prelude_A_seq04",
+      "description": "Short utility command before table write (ACK visible)",
+      "packet": "00:04:80:00:00:05:06:0a:22:2a:2b:0f:86",
+      "decode": {
+        "seq": 4,
+        "header": "80 00 00 05 06 0A",
+        "payload": "22 2A 2B 0F",
+        "checksum": "86",
+        "calc": "sum(payload)=0x86"
+      }
+    },
+    {
+      "name": "vendor_prelude_B_seq05",
+      "description": "Short utility command before table write (ACK visible)",
+      "packet": "00:05:80:00:00:05:06:0a:11:1a:1b:0f:55",
+      "decode": {
+        "seq": 5,
+        "header": "80 00 00 05 06 0A",
+        "payload": "11 1A 1B 0F",
+        "checksum": "55",
+        "calc": "sum(payload)=0x55"
+      }
+    },
+    {
+      "name": "effect_table_06_seq06",
+      "description": "EFFECT_TIMER: initial record set (OFF 17:57, RR=FE) + empty slots",
+      "packet": "00:06:80:00:00:58:59:0b:21:f0:00:00:00:11:39:00:fe:00:00:00:00:00:f0:0f:00:00:00:00:00:00:00:00:00:00:00:00:00:0f:00:00:00:00:00:00:00:00:00:00:00:00:00:0f:00:00:00:00:00:00:00:00:00:00:00:00:00:0f:00:00:00:00:00:00:00:00:00:00:00:00:00:0f:00:00:00:00:00:00:00:00:00:00:00:00:00:00:f0:84",
+      "decode": {
+        "seq": 6,
+        "header": "80 00 00 58 59 0B",
+        "payload_prefix": "21",
+        "checksum": "84",
+        "calc": "sum(payload)&0xFF=0x84",
+        "records": [
+          {
+            "raw": "F0 00 00 00 11 39 00 FE 00 00 00 00 00",
+            "type": "off",
+            "hh": 17,
+            "mm": 57,
+            "RR": "FE"
+          },
+          { "raw": "F0 0F 00 00 00 00 00 00 00 00 00 00 00", "type": "empty" },
+          { "raw": "0F 00 00 00 00 00 00 00 00 00 00 00 00", "type": "empty" }
+        ]
+      }
+    },
+    {
+      "name": "effect_table_07_seq07",
+      "description": "EFFECT_TIMER: added OFF 18:58 with RR=86; empty slots",
+      "packet": "00:07:80:00:00:58:59:0b:21:f0:00:00:00:11:39:00:fe:00:00:00:00:00:f0:f0:00:00:00:12:3a:00:86:00:00:00:00:00:0f:0f:00:00:00:00:00:00:00:00:00:00:00:00:00:0f:00:00:00:00:00:00:00:00:00:00:00:00:00:0f:00:00:00:00:00:00:00:00:00:00:00:00:00:0f:00:00:00:00:00:00:00:00:00:00:00:00:00:00:f0:46",
+      "decode": {
+        "seq": 7,
+        "header": "80 00 00 58 59 0B",
+        "payload_prefix": "21",
+        "checksum": "46",
+        "calc": "sum(payload)&0xFF=0x46",
+        "records": [
+          {
+            "raw": "F0 00 00 00 11 39 00 FE 00 00 00 00 00",
+            "type": "off",
+            "hh": 17,
+            "mm": 57,
+            "RR": "FE"
+          },
+          {
+            "raw": "F0 00 00 00 12 3A 00 86 00 00 00 00 00",
+            "type": "off",
+            "hh": 18,
+            "mm": 58,
+            "RR": "86"
+          },
+          { "raw": "0F 00 00 00 00 00 00 00 00 00 00 00 00", "type": "empty" }
+        ]
+      }
+    },
+    {
+      "name": "effect_table_08_seq08",
+      "description": "EFFECT_TIMER: added one-time ABS-RGB 2025-10-04 16:58, RGB 235,190,135, BR=0x61",
+      "packet": "00:08:80:00:00:58:59:0b:21:f0:00:00:00:11:39:00:fe:00:00:00:00:00:f0:f0:00:00:00:12:3a:00:86:00:00:00:00:00:0f:f0:19:0a:04:10:3a:00:00:61:eb:be:87:00:f0:0f:00:00:00:00:00:00:00:00:00:00:00:00:00:0f:00:00:00:00:00:00:00:00:00:00:00:00:00:0f:00:00:00:00:00:00:00:00:00:00:00:00:00:00:f0:19",
+      "decode": {
+        "seq": 8,
+        "header": "80 00 00 58 59 0B",
+        "payload_prefix": "21",
+        "checksum": "19",
+        "calc": "sum(payload)&0xFF=0x19",
+        "records": [
+          {
+            "raw": "F0 00 00 00 11 39 00 FE 00 00 00 00 00",
+            "type": "off",
+            "hh": 17,
+            "mm": 57,
+            "RR": "FE"
+          },
+          {
+            "raw": "F0 00 00 00 12 3A 00 86 00 00 00 00 00",
+            "type": "off",
+            "hh": 18,
+            "mm": 58,
+            "RR": "86"
+          },
+          {
+            "raw": "F0 19 0A 04 10 3A 00 00 61 EB BE 87 00",
+            "type": "abs_rgb_once",
+            "date": "2025-10-04",
+            "hh": 16,
+            "mm": 58,
+            "brightness_hex": "61",
+            "rgb": [235, 190, 135]
+          }
+        ]
+      }
+    },
+    {
+      "name": "effect_table_09_seq09",
+      "description": "EFFECT_TIMER: ABS-RGB 2025-10-04 16:58; OFF 17:57 RR=FE; OFF 18:58 RR=86; EFFECT 19:05 (ID 0x34, SPD 0x7C, BRI 0x0B)",
+      "packet": "00:09:80:00:00:58:59:0b:21:f0:19:0a:04:10:3a:00:00:61:eb:be:87:00:f0:f0:00:00:00:11:39:00:fe:00:00:00:00:00:f0:f0:00:00:00:12:3a:00:86:00:00:00:00:00:0f:f0:00:00:00:13:05:00:7c:34:0b:00:00:00:f0:0f:00:00:00:00:00:00:00:00:00:00:00:00:00:0f:00:00:00:00:00:00:00:00:00:00:00:00:00:00:f0:bd",
+      "decode": {
+        "seq": 9,
+        "header": "80 00 00 58 59 0B",
+        "payload_prefix": "21",
+        "checksum": "BD",
+        "calc": "sum(payload)&0xFF=0xBD",
+        "records": [
+          {
+            "raw": "F0 19 0A 04 10 3A 00 00 61 EB BE 87 00",
+            "type": "abs_rgb_once",
+            "date": "2025-10-04",
+            "hh": 16,
+            "mm": 58,
+            "brightness_hex": "61",
+            "rgb": [235, 190, 135]
+          },
+          {
+            "raw": "F0 00 00 00 11 39 00 FE 00 00 00 00 00",
+            "type": "off",
+            "hh": 17,
+            "mm": 57,
+            "RR": "FE"
+          },
+          {
+            "raw": "F0 00 00 00 12 3A 00 86 00 00 00 00 00",
+            "type": "off",
+            "hh": 18,
+            "mm": 58,
+            "RR": "86"
+          },
+          {
+            "raw": "F0 00 00 00 13 05 00 7C 34 0B 00 00 00",
+            "type": "effect",
+            "hh": 19,
+            "mm": 5,
+            "speed_hex": "7C",
+            "effect_id_hex": "34",
+            "brightness_hex": "0B"
+          }
+        ]
+      }
     }
   ]
 }

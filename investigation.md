@@ -23,6 +23,7 @@
   - RGB / Effects / Candle / Time -> `bias = 0x38`
 
 **Checksum Examples:**
+
 - Power ON seq 0x38: `(0x38 + 0x26) & 0xFF = 0x5E` ✅
 - RGB Green seq 0x1B: `(0x1B + 0x38) & 0xFF = 0x53` ✅
 - RGB Red seq 0x23: `(0x23 + 0x38) & 0xFF = 0x5B` (but packet shows 0x3F - needs verification)
@@ -55,7 +56,7 @@ Info: Treat these packets as **state synchronisation** performed by the mobile a
 | ----------------------- | -------------------- | ------------------------------------------ | -------- |
 | **`0D 0E 0B 3B`**       | Power ON / OFF       | `23/24 [10x00]` (21 B total)               | `0x26`   |
 | **`08 09 0B 31`**       | Static RGB           | `R G B 00 00 0F` (16 B)                    | `0x38`   |
-| **`05 06 0B 38`**       | Built-in Effect      | `effectID timeout brightness` | `0x38`   |
+| **`05 06 0B 38`**       | Built-in Effect      | `effectID timeout brightness`              | `0x38`   |
 | **`09 0A 0B 39 D1`**    | Candle               | `R G B invertedSpeed brightness amplitude` | `0x38`   |
 | **`04 05 0A`**          | Time sync            | `hh mm ss` (BCD)                           | `0x38`   |
 | **`0C 0D 0B`**          | Basic timer (ON/OFF) | 8 B record x N                             | `0x26`   |
@@ -64,7 +65,8 @@ Info: Treat these packets as **state synchronisation** performed by the mobile a
 ### Effect Protocol Update
 
 **Payload Structure:** `[effectID] [timeout] [brightness]` (3 bytes)
-- `effectID`: effect identifier (0x25 = seven-color cross-fade) 
+
+- `effectID`: effect identifier (0x25 = seven-color cross-fade)
 - `timeout`: animation speed control (0x00-0xFF, higher values = slower animation)
 - `brightness`: 0x00-0x64 (0-100%)
 
