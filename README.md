@@ -100,6 +100,8 @@ Parameters:
 
 ### Alarm System
 
+⚠️ **KNOWN LIMITATION:** Only OFF alarms have been tested. Alarms write successfully to device memory and appear in the Zengge app, but **do NOT execute** at scheduled times. Repeat masks (days) may not work correctly. Root cause under investigation.
+
 Set scheduled actions with format: `HH:MM[,params][/days][#brightness][%speed]`
 
 ```bash

@@ -86,13 +86,17 @@ const USAGE_HELP = `Usage:
     --speed N            Candle speed 1-100% (default: 50)
     --brightness N       Candle brightness 1-100% (default: 100)
   
-  Alarm System (based on protocol investigation):
+  Alarm System (⚠️  WARNING: Programming works, execution does NOT):
     --alarm-on <format>      Set power ON alarm(s)
     --alarm-off <format>     Set power OFF alarm(s)
     --alarm-rgb <format>     Set RGB color alarm(s)
     --alarm-effect <format>  Set effect alarm(s)
     --alarm-clear <type>     Clear alarms (basic/effect/all)
-    
+
+    ⚠️  KNOWN LIMITATION: Only OFF alarms tested. Alarms write successfully to device
+    memory and appear in the official app, but do NOT execute at scheduled times.
+    Repeat masks (days) may not work correctly. Root cause under investigation.
+
     Alarm Format: HH:MM[,param][/days][#brightness][%speed][;next_alarm]
     
     Basic examples:
@@ -189,6 +193,7 @@ const PROTOCOL_HEADERS = {
   CANDLE: '80 00 00 09 0A 0B 39 D1',
   BASIC_TIMER: '80 00 00 0C 0D 0B',
   EFFECT_TIMER: '80 00 00 58 59 0B',
+  PRELUDE: '80 00 00 05 06 0A', // Vendor prelude sequences
 };
 
 const PROTOCOL = {
@@ -597,7 +602,9 @@ function parseConfig(argv, config) {
 
     const speedPercent = clamp(argv.speed, 1, 100, 50);
     const TIMEOUT_MAX = 50; // instead of the original 255
-    const timeout = Math.round(TIMEOUT_MAX - (speedPercent / 100) * TIMEOUT_MAX);
+    const timeout = Math.round(
+      TIMEOUT_MAX - (speedPercent / 100) * TIMEOUT_MAX,
+    );
     const brightness = clamp(argv.brightness, 1, 100, 100);
 
     operations.push({ type: 'effect', effectId, timeout, brightness });
@@ -737,11 +744,7 @@ const buildRgbPacket = (r, g, b) =>
   );
 
 const buildEffectPacket = (effectId, timeout, brightness) => {
-  const payload = Buffer.from([
-    effectId,
-    timeout,
-    brightness,
-  ]);
+  const payload = Buffer.from([effectId, timeout, brightness]);
   return buildPacketBase(HEADERS.EFFECT, payload, PROTOCOL.RGB_CHECKSUM_BASE);
 };
 
@@ -752,6 +755,17 @@ const buildTimePacket = (date = new Date()) => {
   const ss = date.getSeconds();
   const payload = Buffer.from([hh | 0x80, mm | 0x80, ss | 0x80]);
   return buildPacketBase(HEADERS.TIME, payload, PROTOCOL.RGB_CHECKSUM_BASE);
+};
+
+// Build prelude sequence packets (vendor initialization)
+const buildPreludeAPacket = () => {
+  const payload = toBuffer('222a2b0f');
+  return buildPacketBase(HEADERS.PRELUDE, payload, PROTOCOL.RGB_CHECKSUM_BASE);
+};
+
+const buildPreludeBPacket = () => {
+  const payload = toBuffer('111a1b0f');
+  return buildPacketBase(HEADERS.PRELUDE, payload, PROTOCOL.RGB_CHECKSUM_BASE);
 };
 
 const buildCandlePacket = (
@@ -806,36 +820,55 @@ const buildBasicAlarmEntry = (
   ]);
 };
 
-// Build effect alarm entry (16 bytes) - for RGB colors and effects
+// Build effect alarm entry (87 bytes) - for RGB colors, effects, and OFF actions
+// Format per test-alarm-formats.js: F0 YY MM DD HH mm SS RR BR R G B 00 [zeros to 87 bytes]
+// - YY=0, MM=0, DD=0 indicates weekly/relative format (repeating alarm)
+// - YY/MM/DD set indicates absolute one-shot alarm
+// - RR is repeat mask (day of week bits or 0xFE for daily)
 const buildEffectAlarmEntry = (
   dowMask,
   hour,
   minute,
   actionType,
-  actionParams = {}
+  actionParams = {},
 ) => {
-  const entry = Buffer.alloc(16, 0);
-  entry[0] = dowMask; // Days of week mask
-  entry[1] = hour; // Hour
-  entry[2] = minute; // Minute
-  entry[3] = actionType; // Action type (RGB=0x0F, POWER_OFF=0xF0, effects=0x38-0x4C)
+  const entry = Buffer.alloc(87, 0);
+  entry[0] = 0xf0; // Slot marker
+  entry[1] = 0x00; // YY = 0 for weekly/relative format
+  entry[2] = 0x00; // MM = 0
+  entry[3] = 0x00; // DD = 0
+  entry[4] = hour & 0xff;
+  entry[5] = minute & 0xff;
+  entry[6] = 0x00; // SS (seconds/reserved)
+  entry[7] = dowMask & 0xff; // RR = repeat mask
 
   // Fill parameters based on action type
   if (actionType === PROTOCOL.ALARM_ACTIONS.RGB) {
-    // RGB format: type=0x0F, R, G, B, brightness
+    // RGB format: BR, R, G, B (brightness as byte 8)
     const { r = 255, g = 255, b = 255, brightness = 100 } = actionParams;
-    entry[4] = clamp(r, 0, 255);
-    entry[5] = clamp(g, 0, 255);
-    entry[6] = clamp(b, 0, 255);
-    entry[7] = clamp(brightness, 1, 100);
+    entry[8] = clamp(brightness, 1, 100); // BR = brightness
+    entry[9] = clamp(r, 0, 255); // R
+    entry[10] = clamp(g, 0, 255); // G
+    entry[11] = clamp(b, 0, 255); // B
+    entry[12] = 0x00; // tail byte
+  } else if (actionType === PROTOCOL.ALARM_ACTIONS.POWER_OFF) {
+    // OFF format: BR=0, R=0, G=0, B=0 (darkness = OFF)
+    entry[8] = 0x00; // BR = 0 (dark = OFF)
+    entry[9] = 0x00; // R
+    entry[10] = 0x00; // G
+    entry[11] = 0x00; // B
+    entry[12] = 0x00; // tail byte
   } else if (actionType >= 0x38 && actionType <= 0x4c) {
+    // Effect format: for now, use same RGB-like structure
+    // TODO: verify effect format in captures
     const { speed = 50, brightness = 100 } = actionParams;
-    entry[4] = actionType; // effectId (same as actionType for effects)
-    entry[5] = clamp(speed, 1, 100);
-    entry[6] = clamp(brightness, 1, 100);
+    entry[8] = clamp(brightness, 1, 100);
+    entry[9] = actionType; // Store effect ID in R channel (tentative)
+    entry[10] = clamp(speed, 1, 100);
+    entry[11] = 0x00;
+    entry[12] = 0x00;
   }
 
-  entry[15] = 0xf0; // End marker
   return entry;
 };
 
@@ -854,13 +887,23 @@ const buildBasicAlarmPacket = (alarmEntries) => {
 };
 
 // Build complete effect alarm table packet
+// EFFECT_TIMER expects a single 87-byte payload, not multiple entries
+// If multiple entries provided, only the first is used
 const buildEffectAlarmPacket = (alarmEntries) => {
-  const entries = Buffer.concat(
-    alarmEntries.length > 0 ? alarmEntries : [Buffer.alloc(16, 0)],
-  );
+  let payload;
+  if (alarmEntries.length > 0) {
+    payload = alarmEntries[0]; // Use first entry only
+    if (alarmEntries.length > 1) {
+      console.warn(
+        `⚠️  EFFECT_TIMER supports only 1 slot, using first of ${alarmEntries.length} entries`,
+      );
+    }
+  } else {
+    payload = Buffer.alloc(87, 0); // Empty 87-byte slot
+  }
   return buildPacketBase(
     HEADERS.EFFECT_TIMER,
-    entries,
+    payload,
     PROTOCOL.RGB_CHECKSUM_BASE,
   );
 };
@@ -899,6 +942,12 @@ function buildPacket(operation) {
     return buildEffectAlarmPacket(operation.entries);
   }
   throw new Error(`Unknown operation type: ${operation.type}`);
+}
+
+// Send a raw packet (used for prelude sequences)
+async function sendRawPacket(characteristic, packet, label = 'RAW') {
+  await characteristic.writeAsync(packet, false);
+  console.log(`📤 Sent ${label} (${packet.toString('hex')})`);
 }
 
 async function sendPacket(characteristic, operation) {
@@ -982,8 +1031,33 @@ async function connectAndExecute(peripheral, operations) {
 
   await enableNotifications(rxCharacteristic);
 
-  for (const operation of operations) {
+  // Send operations with prelude sequences for alarm operations
+  for (let i = 0; i < operations.length; i++) {
+    const operation = operations[i];
+
+    // Add prelude sequences before alarm writes (based on test-alarm-formats.js)
+    const isAlarmWrite =
+      operation.type === 'basic-alarm' || operation.type === 'effect-alarm';
+    const isTimeSync = operation.type === 'time';
+
+    if (isTimeSync || (isAlarmWrite && i === 0)) {
+      // Send prelude A + B before first alarm or after time sync
+      await sendRawPacket(txCharacteristic, buildPreludeAPacket(), 'PRELUDE A');
+      await sendRawPacket(txCharacteristic, buildPreludeBPacket(), 'PRELUDE B');
+    }
+
     await sendPacket(txCharacteristic, operation);
+
+    // After effect alarm writes, send prelude B again (commit nudge)
+    if (operation.type === 'effect-alarm') {
+      await new Promise((resolve) => setTimeout(resolve, 180));
+      await sendRawPacket(
+        txCharacteristic,
+        buildPreludeBPacket(),
+        'PRELUDE B (commit)',
+      );
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
   }
 
   await peripheral.disconnectAsync();
