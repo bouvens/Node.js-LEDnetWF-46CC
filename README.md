@@ -221,12 +221,12 @@ If you experience connection problems:
 | **HappyLighting / Triones bulbs**                | Confirmed compatible packets, discussed in IoT forums.       | ([discourse.mozilla.org][3])        |
 | **Generic Magic Home Wi-Fi+BLE RGBW boxes**      | Sold on Amazon/Walmart/eBay, fall back to the same BLE spec. | ([amazon.com][4], [walmart.com][5]) |
 
-[1]: https://github.com/8none1/zengge_lednetwf?utm_source=chatgpt.com '8none1/zengge_lednetwf - GitHub'
-[2]: https://play.google.com/store/apps/details?hl=en_US&id=com.zengge.blev2&utm_source=chatgpt.com 'ZENGGE - Apps on Google Play'
+[1]: https://github.com/8none1/zengge_lednetwf '8none1/zengge_lednetwf - GitHub'
+[2]: https://play.google.com/store/apps/details?hl=en_US&id=com.zengge.blev2 'ZENGGE - Apps on Google Play'
 
-[3]: https://discourse.mozilla.org/t/wip-adapter-for-bluetooth-happylighting-triones-bulbs/49477?utm_source=chatgpt.com "[WIP] Adapter for Bluetooth \"HappyLighting\" / \"Triones\" bulbs"
-[4]: https://www.amazon.com/magic-home-led-controller/s?k=magic+home+led+controller&utm_source=chatgpt.com "Magic Home Led Controller - Amazon.com"
-[5]: https://www.walmart.com/c/kp/magic-home-wifi-led-controller?utm_source=chatgpt.com "Magic Home Wifi Led Controller - Walmart"
+[3]: https://discourse.mozilla.org/t/wip-adapter-for-bluetooth-happylighting-triones-bulbs/49477 "[WIP] Adapter for Bluetooth \"HappyLighting\" / \"Triones\" bulbs"
+[4]: https://www.amazon.com/magic-home-led-controller/s?k=magic+home+led+controller "Magic Home Led Controller - Amazon.com"
+[5]: https://www.walmart.com/c/kp/magic-home-wifi-led-controller "Magic Home Wifi Led Controller - Walmart"
 
 ## License
 
