@@ -104,6 +104,16 @@ The protocol was reverse-engineered from packet captures (see `investigation.md`
 - Effect control with speed and brightness parameters
 - Candle mode with amplitude control
 
+#### Response Data (Notifications)
+
+The device sends state updates via notifications (characteristic FF02) after every command. Currently these are **not monitored** by the implementation, but could be useful for:
+
+- **Alarm debugging**: Confirm alarm table writes and detect firmware responses
+- **Command verification**: Ensure device accepted and applied the command
+- **State tracking**: Monitor current power/color/mode without re-querying
+
+Format: JSON payload with hex-encoded device state (14 bytes). See [investigation.md](investigation.md) for decoding details.
+
 #### Alarm System Status and Limitations
 
 **Current Status:**
@@ -111,7 +121,7 @@ The protocol was reverse-engineered from packet captures (see `investigation.md`
 - ✅ Alarm **programming** works - alarms are written to device memory
 - ✅ Alarms appear in Zengge app
 - ✅ RTC (real-time clock) synchronization is reliable
-- ✅ Device acknowledges alarm table updates (confirmed via `0F22` response dumps)
+- ✅ Device acknowledges alarm table updates (confirmed via `0F22` response dumps in notifications)
 - ❌ Alarms **do not execute** at the scheduled time (device does not trigger actions)
 
 **What Works:**
@@ -173,3 +183,4 @@ The project uses Prettier with single quotes, trailing commas, and LF line endin
 
 - Successful packet transmission doesn't confirm correct protocol usage. The device doesn't return errors, so only user testing confirms if commands work.
 - "Timeout: device not found" errors may be transient - retry the command before investigating further.
+- **Checksum validation**: External projects (e.g., @8none1/zengge_lednetwf) report that checksums are **completely ignored** by the device after MTU/notification setup. However, initial testing suggested bad checksums disable timers. This discrepancy needs verification - the current implementation maintains correct checksums defensively.

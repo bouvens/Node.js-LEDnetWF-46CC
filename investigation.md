@@ -111,11 +111,70 @@ The controller stores **16 slots per table** and overwrites the oldest one when 
 | HappyLighting / Triones bulbs    | ✅         | Confirmed on forums           |
 | SP110E / SP105E BT controllers   | ⚠️ Partial | Need custom LED-count command |
 
+## Response Data (Notifications)
+
+After enabling notifications (write `0x01 0x00` to CCCD 0x2902), the device sends state updates on every command.
+
+**Format**: 8-byte BLE header + hex-encoded JSON string
+
+Example response:
+```
+{"code":0,"payload":"811D24610F313232FF640200305C"}
+```
+
+**Payload decoding** (14 bytes hex string):
+```
+  fixed (0x81)
+  |  firmware/device (0x1D)
+  |  |  power (0x23=ON, 0x24=OFF)
+  |  |  |  mode (0x61=HSV, 0x25-0x71=effects, 0xF0=RGB)
+  |  |  |  |  brightness (0-100 hex)
+  |  |  |  |  |  red (0-255)
+  |  |  |  |  |  |  green (0-255)
+  |  |  |  |  |  |  |  blue (0-255)
+  |  |  |  |  |  |  |  |  white_temp (0-100)
+  |  |  |  |  |  |  |  |  |  unknown
+  |  |  |  |  |  |  |  |  |  |  unknown
+  |  |  |  |  |  |  |  |  |  |  |  unknown
+  |  |  |  |  |  |  |  |  |  |  |  |  unknown
+  |  |  |  |  |  |  |  |  |  |  |  |  |  checksum (sum AND 0xFF)
+  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+  81 1D 23 61 0F 31 64 32 FF 64 02 00 30 5C
+```
+
+**Current implementation**: Notifications enabled but not monitored. Could be useful for:
+- Command confirmation (especially for alarm debugging)
+- Automatic firmware detection
+- State verification
+
+## Advertising Data
+
+The device broadcasts current state in BLE advertising packets **before connection**.
+
+Example (power ON, HSV mode):
+```
+                   manufacturer_data
+                   |  company_id
+                   |  |  firmware (0x53)
+                   |  |  |  power (0x23=ON, 0x24=OFF)
+                   |  |  |  |  mode
+                   |  |  |  |  |  brightness
+                   |  |  |  |  |  |  RGB values
+                   |  |  |  |  |  |  |  |  |  color_temp
+                   |  |  |  |  |  |  |  |  |  |  LED_count
+                   |  |  |  |  |  |  |  |  |  |  |
+1E FF 02 5A 53 ... 23 61 0F 64 32 51 00 32 02 00 1C 00 00
+```
+
+**Use case**: Quick state polling without connecting (not implemented).
+
 ## Open questions
 
 - Absolute maximum packet size before fragmentation? (Telink 825x spec says 244 B).
-- "Smear" custom animations (`0x59` header) - encoding details for gradient stops.
-- Music mode - only partially decoded (`0D 0E 0B 73`).
+- Custom animations (`0x59` header) - encoding details for gradient stops.
+- Music mode format - partially decoded (`0D 0E 0B 73`): `[on/off] [0x26] [type 0x01-0x10] [RGB RGB] [sensitivity] [brightness]`.
+- Should notifications be monitored for command confirmation? Especially useful for alarm debugging since alarms don't execute.
+- Checksum validation discrepancy - external projects report checksums **completely ignored** after MTU/notification setup, but testing suggests bad checksums disable timers. Needs verification.
 
 ## Appendix A - Effect ID map
 
