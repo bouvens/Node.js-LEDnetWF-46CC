@@ -196,12 +196,97 @@ The project implements the communication protocol for LEDnetWF V5 LED strip cont
 - Time sync: Device clock synchronization
 - All packets use proper checksums and sequence numbering
 
-### Not Yet Implemented
+### Example Packet Formats
+
+**Power ON/OFF**:
+```
+  fixed (0x00)
+  |  sequence (wraps 0-255)
+  |  |  header (80 00 00)
+  |  |  |        length (0D 0E)
+  |  |  |        |        command header (0B 3B)
+  |  |  |        |        |        power (0x23=ON, 0x24=OFF)
+  |  |  |        |        |        |  padding (10 bytes)
+  |  |  |        |        |        |  |                       checksum
+  |  |  |        |        |        |  |                       |
+  00 38 80 00 00 0D 0E    0B 3B    23 00 00 00 00 00 00 00 00 00 00 5E
+```
+
+**Static RGB** (Red = 255, Green = 0, Blue = 0):
+```
+  fixed
+  |  sequence
+  |  |  header
+  |  |  |        length
+  |  |  |        |        RGB header (0B 31)
+  |  |  |        |        |        R (0-255)
+  |  |  |        |        |        |  G (0-255)
+  |  |  |        |        |        |  |  B (0-255)
+  |  |  |        |        |        |  |  |  padding
+  |  |  |        |        |        |  |  |  |        checksum
+  |  |  |        |        |        |  |  |  |        |
+  00 23 80 00 00 08 09    0B 31    FF 00 00 00 00 0F 3F
+```
+
+**Effect** (Seven-color cross-fade, ID=0x25, speed=37%, brightness=16%):
+```
+  fixed
+  |  sequence
+  |  |  header
+  |  |  |        length
+  |  |  |        |        effect header (0B 38)
+  |  |  |        |        |        effect ID
+  |  |  |        |        |        |  speed (0-255)
+  |  |  |        |        |        |  |  brightness (0-100)
+  |  |  |        |        |        |  |  |  checksum
+  |  |  |        |        |        |  |  |  |
+  00 0D 80 00 00 05 06    0B 38    25 10 32 9F
+```
+
+**Candle mode** (Orange: R=255, G=123, B=0, speed=31, brightness=75, amplitude=3):
+```
+  fixed
+  |  sequence
+  |  |  header
+  |  |  |        length
+  |  |  |        |        candle header (0B 39 D1)
+  |  |  |        |        |           R (0-255)
+  |  |  |        |        |           |  G (0-255)
+  |  |  |        |        |           |  |  B (0-255)
+  |  |  |        |        |           |  |  |  inverted speed
+  |  |  |        |        |           |  |  |  |  brightness (0-100)
+  |  |  |        |        |           |  |  |  |  |  amplitude (1-3)
+  |  |  |        |        |           |  |  |  |  |  |  checksum
+  |  |  |        |        |           |  |  |  |  |  |  |
+  00 18 80 00 00 09 0A    0B 39 D1    FF 7B 00 1F 4B 03 F1
+```
+
+For detailed protocol documentation, see [investigation.md](investigation.md).
+
+### Not Implemented
 
 - **Microphone mode (MIC)**: Built-in microphone for music-reactive lighting effects
+  - Protocol header: `0D 0E 0B 73`
+  - Format: `[on/off] [0x26] [type 0x01-0x10] [RGB RGB] [sensitivity] [brightness]`
+
 - **Music integration**: Bluetooth audio streaming and music synchronization
-- **Custom patterns**: User-defined color sequences and animations
-- **LED strip configuration**: Setting the number of LEDs and segments
+  - Audio-driven lighting effects
+  - Beat detection and color transitions
+
+- **Custom patterns**: User-defined color sequences
+  - Protocol header: `59`
+  - Define sequence of up to 16 colors
+  - Transition modes: jump, gradual, or strobe
+  - Configurable speed
+
+- **Response data parsing**: Read device state from notifications
+  - Currently enabled but not monitored
+  - JSON payload with power state, current color, mode, brightness
+  - Useful for command confirmation and state verification
+
+- **Advertising data parsing**: Read device state without connecting
+  - Device broadcasts current state in BLE advertising packets
+  - Quick state polling without connection overhead
 
 ## Troubleshooting
 
