@@ -86,14 +86,14 @@ const USAGE_HELP = `Usage:
     --speed N            Candle speed 1-100% (default: 50)
     --brightness N       Candle brightness 1-100% (default: 100)
   
-  Alarm System (⚠️  WARNING: Programming works, execution does NOT):
+  Alarm System (WARNING: Programming works, execution does NOT):
     --alarm-on <format>      Set power ON alarm(s)
     --alarm-off <format>     Set power OFF alarm(s)
     --alarm-rgb <format>     Set RGB color alarm(s)
     --alarm-effect <format>  Set effect alarm(s)
     --alarm-clear <type>     Clear alarms (basic/effect/all)
 
-    ⚠️  KNOWN LIMITATION: Only OFF alarms tested. Alarms write successfully to device
+    KNOWN LIMITATION: Only OFF alarms tested. Alarms write successfully to device
     memory and appear in the official app, but do NOT execute at scheduled times.
     Repeat masks (days) may not work correctly. Root cause under investigation.
 
@@ -184,7 +184,140 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-const PROTOCOL_HEADERS = {
+type EffectId = (typeof PROTOCOL.EFFECTS)[keyof typeof PROTOCOL.EFFECTS];
+type EffectAlias =
+  | 'fade7'
+  | 'strobe7'
+  | 'jump7'
+  | 'red'
+  | 'green'
+  | 'blue'
+  | 'yellow'
+  | 'cyan'
+  | 'purple'
+  | 'white'
+  | 'redgreen'
+  | 'redblue'
+  | 'greenblue'
+  | 'redstrobe'
+  | 'greenstrobe'
+  | 'bluestrobe'
+  | 'yellowstrobe'
+  | 'cyanstrobe'
+  | 'purplestrobe'
+  | 'whitestrobe';
+type EffectAliasMap = Record<EffectAlias, EffectId>;
+
+type RgbCsv = `${number},${number},${number}`;
+
+interface DefaultsConfig {
+  rgb: RgbCsv;
+  alarms?: Record<string, string | undefined>;
+}
+
+interface DeviceConfig {
+  id: string | null;
+  name: string | null;
+}
+
+interface AppConfig {
+  defaults: DefaultsConfig;
+  device: DeviceConfig;
+}
+
+type PowerOperation = { type: 'power'; on: boolean };
+type RgbOperation = {
+  type: 'rgb';
+  red: number;
+  green: number;
+  blue: number;
+};
+type EffectOperation = {
+  type: 'effect';
+  effectId: number;
+  timeout: number;
+  brightness: number;
+};
+type TimeOperation = { type: 'time'; date: Date };
+type CandleOperation = {
+  type: 'candle';
+  amplitude: number;
+  speed: number;
+  brightness: number;
+  red: number;
+  green: number;
+  blue: number;
+};
+type BasicAlarmOperation = { type: 'basic-alarm'; entries: Buffer[] };
+type EffectAlarmOperation = { type: 'effect-alarm'; entries: Buffer[] };
+type Operation =
+  | PowerOperation
+  | RgbOperation
+  | EffectOperation
+  | TimeOperation
+  | CandleOperation
+  | BasicAlarmOperation
+  | EffectAlarmOperation;
+
+interface ParseConfigResult {
+  wantedId?: string;
+  wantedName?: string;
+  operations: Operation[];
+}
+
+interface NobleCharacteristic {
+  uuid: string;
+  writeAsync(data: Buffer, withoutResponse: boolean): Promise<void>;
+  subscribeAsync(): Promise<void>;
+}
+
+interface NobleService {
+  uuid: string;
+  discoverCharacteristicsAsync(
+    uuids: string[],
+  ): Promise<NobleCharacteristic[]>;
+}
+
+interface NoblePeripheral {
+  id: string;
+  advertisement: { localName?: string };
+  connectAsync(): Promise<void>;
+  disconnectAsync(): Promise<void>;
+  discoverServicesAsync(uuids: string[]): Promise<NobleService[]>;
+}
+
+interface CLIArgs {
+  id?: string;
+  name?: string;
+  rgb?: string;
+  effect?: string;
+  speed?: number | string;
+  brightness?: number | string;
+  amplitude?: number | string;
+  'alarm-on'?: string;
+  'alarm-off'?: string;
+  'alarm-rgb'?: string;
+  'alarm-effect'?: string;
+  'alarm-clear'?: string | boolean;
+  on?: boolean;
+  off?: boolean;
+  help?: boolean;
+  'discover-all'?: boolean;
+  candle?: boolean;
+  'time-sync'?: boolean;
+  [key: string]: unknown;
+}
+
+type ProtocolHeader =
+  | 'POWER'
+  | 'RGB'
+  | 'TIME'
+  | 'EFFECT'
+  | 'CANDLE'
+  | 'BASIC_TIMER'
+  | 'EFFECT_TIMER'
+  | 'PRELUDE';
+const PROTOCOL_HEADERS: Record<ProtocolHeader, string> = {
   POWER: '80 00 00 0D 0E 0B 3B',
   RGB: '80 00 00 08 09 0B 31',
   TIME: '80 00 00 04 05 0A',
@@ -193,8 +326,18 @@ const PROTOCOL_HEADERS = {
   CANDLE: '80 00 00 09 0A 0B 39 D1',
   BASIC_TIMER: '80 00 00 0C 0D 0B',
   EFFECT_TIMER: '80 00 00 58 59 0B',
-  PRELUDE: '80 00 00 05 06 0A', // Vendor prelude sequences
+  PRELUDE: '80 00 00 05 06 0A', // Vendor prelude sequence
 };
+
+const toBuffer = (hexString: string): Buffer =>
+  Buffer.from(hexString.replace(/\s+/g, ''), 'hex');
+
+const HEADERS = Object.fromEntries(
+  Object.entries(PROTOCOL_HEADERS).map(([key, value]) => [
+    key,
+    toBuffer(value),
+  ]),
+) as Record<ProtocolHeader, Buffer>;
 
 const PROTOCOL = {
   POWER_ON: 0x23,
@@ -238,7 +381,7 @@ const PROTOCOL = {
 };
 
 // Effect aliases for easier CLI usage - separate from protocol
-const EFFECT_ALIASES = {
+const EFFECT_ALIASES: EffectAliasMap = {
   // Short aliases
   fade7: PROTOCOL.EFFECTS.SEVEN_COLOR_CROSS_FADE,
   strobe7: PROTOCOL.EFFECTS.SEVEN_COLOR_STROBE,
@@ -266,13 +409,22 @@ const EFFECT_ALIASES = {
   cyanstrobe: PROTOCOL.EFFECTS.CYAN_STROBE,
   purplestrobe: PROTOCOL.EFFECTS.PURPLE_STROBE,
   whitestrobe: PROTOCOL.EFFECTS.WHITE_STROBE,
-};
+} as const;
 
-const clamp = (value, min, max, defaultValue) => {
+function isEffectAliasKey(name: string): name is EffectAlias {
+  return (EFFECT_ALIASES as Record<string, unknown>)[name] !== undefined;
+}
+
+const clamp = (
+  value: number | string | undefined | null,
+  min: number,
+  max: number,
+  defaultValue?: number,
+): number => {
   if (value === undefined || value === null) {
     return defaultValue !== undefined ? defaultValue : min;
   }
-  const parsed = parseInt(value, 10);
+  const parsed = parseInt(String(value), 10);
   if (isNaN(parsed)) {
     return defaultValue !== undefined ? defaultValue : min;
   }
@@ -290,7 +442,7 @@ const TIMING = {
   CONNECTION_TIMEOUT: 20_000,
 };
 
-const DEFAULT_CONFIG = {
+const DEFAULT_CONFIG: AppConfig = {
   defaults: {
     rgb: '255,0,0',
     alarms: {},
@@ -302,13 +454,13 @@ const DEFAULT_CONFIG = {
 };
 
 // Configuration and setup functions
-function loadConfig() {
+function loadConfig(): AppConfig {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = dirname(__filename);
   const configPath = join(__dirname, 'config.json');
 
   try {
-    const userConfig = JSON.parse(readFileSync(configPath, 'utf8'));
+    const userConfig = JSON.parse(readFileSync(configPath, 'utf8')) as Partial<AppConfig>;
     return {
       device: { ...DEFAULT_CONFIG.device, ...userConfig.device },
       defaults: { ...DEFAULT_CONFIG.defaults, ...userConfig.defaults },
@@ -318,19 +470,23 @@ function loadConfig() {
   }
 }
 
-function parseRgbColor(rgbString, config) {
+function parseRgbColor(
+  rgbString: string | undefined,
+  config: AppConfig,
+): [number, number, number] {
   const defaultRgb = config.defaults?.rgb || DEFAULT_CONFIG.defaults.rgb;
   const colorString = rgbString || defaultRgb;
-  return colorString
+  const parts = colorString
     .split(',')
     .map((value) => Number(value) & PROTOCOL.SEQUENCE_MASK);
+  return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
 }
 
-function parseConfig(argv, config) {
+function parseConfig(argv: CLIArgs, config: AppConfig): ParseConfigResult {
   const wantedId = (argv.id || config.device?.id)?.toLowerCase();
   const wantedName = (argv.name || config.device?.name)?.toLowerCase();
 
-  const operations = [];
+  const operations: Operation[] = [];
 
   // Handle time synchronization (direct call)
   if (argv['time-sync']) {
@@ -338,7 +494,7 @@ function parseConfig(argv, config) {
   }
 
   // Parse individual alarm entry with format: HH:MM[,param][/days][#brightness][%speed]
-  function parseAlarmEntry(entryStr) {
+  function parseAlarmEntry(entryStr: string) {
     // Support multiple alarms separated by semicolon
     return entryStr.split(';').map((entry) => {
       // First parse brightness and speed from the entire entry (before splitting by /)
@@ -379,12 +535,10 @@ function parseConfig(argv, config) {
         if (mod.toLowerCase() === 'once') {
           isOnce = true;
         } else if (/^[01]{7}$/.test(mod)) {
-          // Binary format (e.g., 0011111 for weekdays)
           days = mod;
         }
       });
 
-      // Calculate repeat mask: set bit 7 (0x80) for once mode
       let repeatMask = parseInt(days, 2);
       if (isOnce) {
         repeatMask = 0x80; // Once mode: only bit 7 set, others clear
@@ -421,8 +575,8 @@ function parseConfig(argv, config) {
       operations.push({ type: 'time', date: new Date() });
     }
 
-    const basicAlarms = [];
-    const effectAlarms = [];
+    const basicAlarms: Buffer[] = [];
+    const effectAlarms: Buffer[] = [];
 
     // Clear alarms if requested
     if (argv['alarm-clear']) {
@@ -502,7 +656,7 @@ function parseConfig(argv, config) {
         entries.forEach((entry) => {
           // Reconstruct effect parameter from potentially split parts
           const effectParam = entry.params.join(',').toLowerCase();
-          const effectName = effectParam.split(':')[0]; // Split on colon for effect:params
+          const effectName = effectParam.split(':')[0]; // format is `effect:params`
 
           if (!effectName) {
             console.error(
@@ -511,7 +665,7 @@ function parseConfig(argv, config) {
             process.exit(1);
           }
 
-          // Check if custom colors are specified and valid (effect:R,G,B format)
+          // Check if custom colors are specified and valid (format is `effect:R,G,B`)
           if (effectParam.includes(':')) {
             const customParams = effectParam.split(':')[1].split(',');
 
@@ -534,8 +688,8 @@ function parseConfig(argv, config) {
           }
 
           // Standard effect alarm processing (no custom colors or invalid format)
-          let effectId;
-          if (EFFECT_ALIASES[effectName]) {
+          let effectId: EffectId | undefined;
+          if (isEffectAliasKey(effectName)) {
             effectId = EFFECT_ALIASES[effectName];
           } else {
             console.error(`❌ Unknown effect: ${effectName}`);
@@ -565,16 +719,16 @@ function parseConfig(argv, config) {
       if (effectAlarms.length > 0) {
         operations.push({ type: 'effect-alarm', entries: effectAlarms });
       }
-    } // Close if for (!argv['alarm-clear'] || argv['alarm-clear'] !== 'all')
-  } // Close if (hasAlarms)
+    }
+  }
 
   // Handle effect
   if (argv.effect) {
-    let effectId;
+    let effectId: EffectId | undefined;
     const effectName = argv.effect.toLowerCase();
 
     // Check aliases first
-    if (EFFECT_ALIASES[effectName]) {
+    if (isEffectAliasKey(effectName)) {
       effectId = EFFECT_ALIASES[effectName];
     } else {
       // Try to find by name in EFFECTS object
@@ -585,8 +739,8 @@ function parseConfig(argv, config) {
             .toLowerCase()
             .replace(/_/g, '')
             .includes(effectName.replace(/[_-]/g, '')),
-      );
-      effectId = effectKey ? PROTOCOL.EFFECTS[effectKey] : null;
+      ) as keyof typeof PROTOCOL.EFFECTS | undefined;
+      effectId = effectKey ? PROTOCOL.EFFECTS[effectKey] : undefined;
     }
 
     if (effectId === undefined) {
@@ -652,7 +806,11 @@ function parseConfig(argv, config) {
   return { wantedId, wantedName, operations };
 }
 
-function validateDevice(wantedId, wantedName, discoverAll) {
+function validateDevice(
+  wantedId?: string,
+  wantedName?: string,
+  discoverAll?: boolean,
+): void {
   if (!wantedId && !wantedName && !discoverAll) {
     console.error(
       '❌ No device specified. Either provide config.json or use --discover-all to scan.',
@@ -670,10 +828,12 @@ function validateDevice(wantedId, wantedName, discoverAll) {
 }
 
 // Bluetooth functions
-const findService = (services) =>
+const findService = (
+  services: NobleService[],
+): NobleService | undefined =>
   services.find((s) => s.uuid.startsWith(BLE.SERVICE_PATTERN)) || services[0];
 
-function findCharacteristics(characteristics) {
+function findCharacteristics(characteristics: NobleCharacteristic[]) {
   const txUuid = BLE.DEFAULT_TX_CHAR;
   const rxUuid = BLE.DEFAULT_RX_CHAR;
 
@@ -685,37 +845,34 @@ function findCharacteristics(characteristics) {
   };
 }
 
-async function enableNotifications(rxCharacteristic) {
+async function enableNotifications(
+  rxCharacteristic?: NobleCharacteristic,
+): Promise<void> {
   if (rxCharacteristic) {
     try {
       await rxCharacteristic.subscribeAsync();
-    } catch (error) {
-      console.warn('⚠️ subscribeAsync error:', error?.message || error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn('⚠️ subscribeAsync error:', message);
     }
   }
 }
 
 // Packet building functions
 let sequence = 0;
-const nextSequence = () => {
+const nextSequence = (): number => {
   const current = sequence;
   sequence = (sequence + 1) & PROTOCOL.SEQUENCE_MASK;
   return current;
 };
 
-const toBuffer = (hexString) =>
-  Buffer.from(hexString.replace(/\s+/g, ''), 'hex');
 const powerPadding = Buffer.alloc(PROTOCOL.POWER_PADDING_SIZE, 0);
 
-// Convert all protocol headers to buffers
-const HEADERS = Object.fromEntries(
-  Object.entries(PROTOCOL_HEADERS).map(([key, value]) => [
-    key,
-    toBuffer(value),
-  ]),
-);
-
-function buildPacketBase(header, payload, checksumBase) {
+function buildPacketBase(
+  header: Buffer,
+  payload: Buffer,
+  checksumBase: number,
+): Buffer {
   const seqByte = nextSequence();
   const checksum = (seqByte + checksumBase) & PROTOCOL.SEQUENCE_MASK;
   return Buffer.concat([
@@ -726,7 +883,7 @@ function buildPacketBase(header, payload, checksumBase) {
   ]);
 }
 
-const buildPowerPacket = (turnOn) =>
+const buildPowerPacket = (turnOn: boolean): Buffer =>
   buildPacketBase(
     HEADERS.POWER,
     Buffer.concat([
@@ -736,20 +893,24 @@ const buildPowerPacket = (turnOn) =>
     PROTOCOL.POWER_CHECKSUM_BASE,
   );
 
-const buildRgbPacket = (r, g, b) =>
+const buildRgbPacket = (r: number, g: number, b: number): Buffer =>
   buildPacketBase(
     HEADERS.RGB,
     Buffer.from([r, g, b, ...PROTOCOL.RGB_TERMINATOR]),
     PROTOCOL.RGB_CHECKSUM_BASE,
   );
 
-const buildEffectPacket = (effectId, timeout, brightness) => {
+const buildEffectPacket = (
+  effectId: number,
+  timeout: number,
+  brightness: number,
+): Buffer => {
   const payload = Buffer.from([effectId, timeout, brightness]);
   return buildPacketBase(HEADERS.EFFECT, payload, PROTOCOL.RGB_CHECKSUM_BASE);
 };
 
 // Build time synchronization packet
-const buildTimePacket = (date = new Date()) => {
+const buildTimePacket = (date: Date = new Date()): Buffer => {
   const hh = date.getHours();
   const mm = date.getMinutes();
   const ss = date.getSeconds();
@@ -758,12 +919,12 @@ const buildTimePacket = (date = new Date()) => {
 };
 
 // Build prelude sequence packets (vendor initialization)
-const buildPreludeAPacket = () => {
+const buildPreludeAPacket = (): Buffer => {
   const payload = toBuffer('222a2b0f');
   return buildPacketBase(HEADERS.PRELUDE, payload, PROTOCOL.RGB_CHECKSUM_BASE);
 };
 
-const buildPreludeBPacket = () => {
+const buildPreludeBPacket = (): Buffer => {
   const payload = toBuffer('111a1b0f');
   return buildPacketBase(HEADERS.PRELUDE, payload, PROTOCOL.RGB_CHECKSUM_BASE);
 };
@@ -775,7 +936,7 @@ const buildCandlePacket = (
   r = 255,
   g = 128,
   b = 0,
-) => {
+): Buffer => {
   const clampedAmplitude = clamp(amplitude, 1, 3);
   const clampedSpeed = clamp(speed, 1, 100);
   const clampedBrightness = clamp(brightness, 1, 100);
@@ -802,12 +963,12 @@ const buildCandlePacket = (
 
 // Build basic alarm entry (8 bytes) - for simple power on/off actions
 const buildBasicAlarmEntry = (
-  dowMask,
-  hour,
-  minute,
-  brightness = 100,
-  speed = 0,
-) => {
+  dowMask: number,
+  hour: number,
+  minute: number,
+  brightness: number = 100,
+  speed: number = 0,
+): Buffer => {
   return Buffer.from([
     dowMask, // Days of week mask
     hour,
@@ -826,12 +987,12 @@ const buildBasicAlarmEntry = (
 // - YY/MM/DD set indicates absolute one-shot alarm
 // - RR is repeat mask (day of week bits or 0xFE for daily)
 const buildEffectAlarmEntry = (
-  dowMask,
-  hour,
-  minute,
-  actionType,
-  actionParams = {},
-) => {
+  dowMask: number,
+  hour: number,
+  minute: number,
+  actionType: number,
+  actionParams: { r?: number; g?: number; b?: number; brightness?: number; speed?: number } = {},
+): Buffer => {
   const entry = Buffer.alloc(87, 0);
   entry[0] = 0xf0; // Slot marker
   entry[1] = 0x00; // YY = 0 for weekly/relative format
@@ -873,7 +1034,7 @@ const buildEffectAlarmEntry = (
 };
 
 // Build complete basic alarm table packet
-const buildBasicAlarmPacket = (alarmEntries) => {
+const buildBasicAlarmPacket = (alarmEntries: Buffer[]): Buffer => {
   const tableMarker = Buffer.from([0x14]);
   const entries = Buffer.concat(
     alarmEntries.length > 0 ? alarmEntries : [Buffer.alloc(8, 0)],
@@ -889,13 +1050,13 @@ const buildBasicAlarmPacket = (alarmEntries) => {
 // Build complete effect alarm table packet
 // EFFECT_TIMER expects a single 87-byte payload, not multiple entries
 // If multiple entries provided, only the first is used
-const buildEffectAlarmPacket = (alarmEntries) => {
+const buildEffectAlarmPacket = (alarmEntries: Buffer[]): Buffer => {
   let payload;
   if (alarmEntries.length > 0) {
     payload = alarmEntries[0]; // Use first entry only
     if (alarmEntries.length > 1) {
       console.warn(
-        `⚠️  EFFECT_TIMER supports only 1 slot, using first of ${alarmEntries.length} entries`,
+        `⚠️ EFFECT_TIMER supports only 1 slot, using first of ${alarmEntries.length} entries`,
       );
     }
   } else {
@@ -908,7 +1069,7 @@ const buildEffectAlarmPacket = (alarmEntries) => {
   );
 };
 
-function buildPacket(operation) {
+function buildPacket(operation: Operation): Buffer {
   if (operation.type === 'power') {
     return buildPowerPacket(operation.on);
   }
@@ -941,16 +1102,24 @@ function buildPacket(operation) {
   if (operation.type === 'effect-alarm') {
     return buildEffectAlarmPacket(operation.entries);
   }
-  throw new Error(`Unknown operation type: ${operation.type}`);
+  const never: never = operation;
+  throw new Error(`Unknown operation type: ${never}`);
 }
 
 // Send a raw packet (used for prelude sequences)
-async function sendRawPacket(characteristic, packet, label = 'RAW') {
+async function sendRawPacket(
+  characteristic: NobleCharacteristic,
+  packet: Buffer,
+  label: string = 'RAW',
+): Promise<void> {
   await characteristic.writeAsync(packet, false);
   console.log(`📤 Sent ${label} (${packet.toString('hex')})`);
 }
 
-async function sendPacket(characteristic, operation) {
+async function sendPacket(
+  characteristic: NobleCharacteristic,
+  operation: Operation,
+): Promise<void> {
   const packet = buildPacket(operation);
   await characteristic.writeAsync(packet, false);
 
@@ -999,15 +1168,19 @@ async function sendPacket(characteristic, operation) {
   }
 }
 
-async function connectAndExecute(peripheral, operations) {
+async function connectAndExecute(
+  peripheral: NoblePeripheral,
+  operations: Operation[],
+): Promise<void> {
   console.log(
     `🔗 Connecting to ${peripheral.advertisement.localName || peripheral.id}…`,
   );
 
   try {
     await peripheral.connectAsync();
-  } catch (error) {
-    console.error('❌ Connection error:', error?.message || error);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('❌ Connection error:', message);
     process.exit(1);
   }
 
@@ -1066,7 +1239,7 @@ async function connectAndExecute(peripheral, operations) {
 }
 
 // Main function
-function main() {
+function main(): void {
   const argv = minimist(process.argv.slice(2), {
     string: [
       'id',
@@ -1115,14 +1288,14 @@ function main() {
 
   const discoveredDevices = new Set();
 
-  noble.on('discover', async (peripheral) => {
+  noble.on('discover', async (peripheral: NoblePeripheral) => {
     const localName = (peripheral.advertisement.localName || '').toLowerCase();
 
     if (argv['discover-all']) {
       if (!discoveredDevices.has(peripheral.id)) {
         discoveredDevices.add(peripheral.id);
         console.log(
-          `• ${peripheral.advertisement.localName || 'unnamed'}  (id: ${
+          `• ${peripheral.advertisement.localName || 'unnamed'} (id: ${
             peripheral.id
           })`,
         );
