@@ -273,9 +273,7 @@ interface NobleCharacteristic {
 
 interface NobleService {
   uuid: string;
-  discoverCharacteristicsAsync(
-    uuids: string[],
-  ): Promise<NobleCharacteristic[]>;
+  discoverCharacteristicsAsync(uuids: string[]): Promise<NobleCharacteristic[]>;
 }
 
 interface NoblePeripheral {
@@ -431,6 +429,20 @@ const clamp = (
   return Math.max(min, Math.min(max, parsed));
 };
 
+// Inverted, and above 0x23 the strip jumps between colors instead of fading.
+const EFFECT_SPEED_FASTEST_BYTE = 0x01;
+const EFFECT_SPEED_SLOWEST_BYTE = 0x23;
+
+const effectSpeedByte = (speedPercent: number): number => {
+  const span = EFFECT_SPEED_SLOWEST_BYTE - EFFECT_SPEED_FASTEST_BYTE;
+  const inverted = EFFECT_SPEED_SLOWEST_BYTE - ((speedPercent - 1) / 99) * span;
+  return clamp(
+    Math.round(inverted),
+    EFFECT_SPEED_FASTEST_BYTE,
+    EFFECT_SPEED_SLOWEST_BYTE,
+  );
+};
+
 const BLE = {
   DEFAULT_TX_CHAR: 'ff01',
   DEFAULT_RX_CHAR: 'ff02',
@@ -460,7 +472,9 @@ function loadConfig(): AppConfig {
   const configPath = join(__dirname, 'config.json');
 
   try {
-    const userConfig = JSON.parse(readFileSync(configPath, 'utf8')) as Partial<AppConfig>;
+    const userConfig = JSON.parse(
+      readFileSync(configPath, 'utf8'),
+    ) as Partial<AppConfig>;
     return {
       device: { ...DEFAULT_CONFIG.device, ...userConfig.device },
       defaults: { ...DEFAULT_CONFIG.defaults, ...userConfig.defaults },
@@ -755,10 +769,7 @@ function parseConfig(argv: CLIArgs, config: AppConfig): ParseConfigResult {
     }
 
     const speedPercent = clamp(argv.speed, 1, 100, 50);
-    const TIMEOUT_MAX = 50; // instead of the original 255
-    const timeout = Math.round(
-      TIMEOUT_MAX - (speedPercent / 100) * TIMEOUT_MAX,
-    );
+    const timeout = effectSpeedByte(speedPercent);
     const brightness = clamp(argv.brightness, 1, 100, 100);
 
     operations.push({ type: 'effect', effectId, timeout, brightness });
@@ -828,9 +839,7 @@ function validateDevice(
 }
 
 // Bluetooth functions
-const findService = (
-  services: NobleService[],
-): NobleService | undefined =>
+const findService = (services: NobleService[]): NobleService | undefined =>
   services.find((s) => s.uuid.startsWith(BLE.SERVICE_PATTERN)) || services[0];
 
 function findCharacteristics(characteristics: NobleCharacteristic[]) {
@@ -991,7 +1000,13 @@ const buildEffectAlarmEntry = (
   hour: number,
   minute: number,
   actionType: number,
-  actionParams: { r?: number; g?: number; b?: number; brightness?: number; speed?: number } = {},
+  actionParams: {
+    r?: number;
+    g?: number;
+    b?: number;
+    brightness?: number;
+    speed?: number;
+  } = {},
 ): Buffer => {
   const entry = Buffer.alloc(87, 0);
   entry[0] = 0xf0; // Slot marker
@@ -1136,9 +1151,8 @@ async function sendPacket(
       }) (${packet.toString('hex')})`,
     );
   } else if (operation.type === 'effect') {
-    const speedPercent = Math.round(100 - (operation.timeout / 255) * 100);
     console.log(
-      `📤 Sent EFFECT ${operation.effectId} speed:${speedPercent}% brightness:${operation.brightness}% (${packet.toString('hex')})`,
+      `📤 Sent EFFECT ${operation.effectId} speedByte:0x${operation.timeout.toString(16).padStart(2, '0')} brightness:${operation.brightness}% (${packet.toString('hex')})`,
     );
   } else if (operation.type === 'time') {
     const date = operation.date || new Date();

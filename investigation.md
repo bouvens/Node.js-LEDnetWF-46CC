@@ -62,13 +62,43 @@ Info: Treat these packets as **state synchronisation** performed by the mobile a
 | **`0C 0D 0B`**          | Basic timer (ON/OFF) | 8 B record x N                             | `0x26`   |
 | **`58 59 0B`**          | RGB/Effect timer     | 16 B record x N                            | `0x26`   |
 
+Candle speed is inverted like the effect speed, but its usable range is the
+full `0x01-0x64` (verified on hardware: `0x01` very fast, `0x1F` and `0x23`
+indistinguishable, `0x50` clearly slower, `0x64` very slow, all still a proper
+candle flicker). Unlike effects, candle does **not** break above `0x23`.
+
 ### Effect Protocol Update
 
-**Payload Structure:** `[effectID] [timeout] [brightness]` (3 bytes)
+**Payload Structure:** `[effectID] [speed] [brightness]` (3 bytes)
 
 - `effectID`: effect identifier (0x25 = seven-color cross-fade)
-- `timeout`: animation speed control (0x00-0xFF, higher values = slower animation)
+- `speed`: **0x01-0x23 only**, inverted (0x01 = fastest, 0x23 = slowest)
 - `brightness`: 0x00-0x64 (0-100%)
+
+**Speed range verified on hardware (2026-09-01), fade7 / 0x25:**
+
+| Byte   | Observed behaviour                                 |
+| ------ | -------------------------------------------------- |
+| `0x01` | very fast fade                                     |
+| `0x10` | smooth fade (matches the app's captured packets)   |
+| `0x12` | smooth fade                                        |
+| `0x1F` | slow fade, close to the app's minimum speed slider |
+| `0x20` | smooth, slow                                       |
+| `0x21` | smooth                                             |
+| `0x22` | smooth                                             |
+| `0x23` | smooth — **slowest usable value**                  |
+| `0x24` | **breaks**: fast strobe flashing through white     |
+| `0x30` | strobe-like jumps                                  |
+| `0xF2` | strobe-like jumps                                  |
+
+Anything above `0x23` is not a slower fade — the firmware switches to a fast
+strobe through white, i.e. a different animation entirely. The previous
+implementation scaled speed into 0x00-0x32 and printed a percentage computed
+against 0xFF, so both the emitted byte and the reported speed were wrong.
+
+Caveat on observation: a fresh EFFECT packet makes the strip snap to a new
+color on arrival. That snap is easy to mistake for the effect itself being
+choppy — judge the animation about 10 s after the write, not during it.
 
 _(Effect IDs listed in Appendix A for reference.)_
 
@@ -118,11 +148,13 @@ After enabling notifications (write `0x01 0x00` to CCCD 0x2902), the device send
 **Format**: 8-byte BLE header + hex-encoded JSON string
 
 Example response:
+
 ```
 {"code":0,"payload":"811D24610F313232FF640200305C"}
 ```
 
 **Payload decoding** (14 bytes hex string):
+
 ```
   fixed (0x81)
   |  firmware/device (0x1D)
@@ -143,6 +175,7 @@ Example response:
 ```
 
 **Current implementation**: Notifications enabled but not monitored. Could be useful for:
+
 - Command confirmation (especially for alarm debugging)
 - Automatic firmware detection
 - State verification
@@ -152,6 +185,7 @@ Example response:
 The device broadcasts current state in BLE advertising packets **before connection**.
 
 Example (power ON, HSV mode):
+
 ```
                    manufacturer_data
                    |  company_id
