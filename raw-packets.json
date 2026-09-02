@@ -1,4 +1,5 @@
 {
+  "_note": "The `packet` bytes are ground truth - captured off the air. Everything else (name, description, params, decode) is a hypothesis about what those bytes mean, and is only trustworthy once reproduced on hardware or read back from the device. Several annotations here were wrong for months; see findings.md.",
   "steps": [
     {
       "name": "static_color_red_23",
@@ -49,16 +50,16 @@
       "params": { "r": 255, "g": 255, "b": 255, "brightness": 100 }
     },
     {
-      "name": "add_alarm_on_everyday",
-      "description": "Daily power-ON alarm at 21:00",
+      "name": "rtc_set_2025-07-04_15-28-05",
+      "description": "RTC clock set (mislabelled as an alarm until 2026-09-02; same layout as rtc_set_* below)",
       "packet": "00:02:80:00:00:0c:0d:0b:10:14:19:07:04:0f:1c:05:05:00:0f:8c",
-      "params": { "time": "21:00", "repeat": "Mon-Sun", "enabled": true }
+      "params": { "date": "2025-07-04", "time": "15:28:05", "dow": 5 }
     },
     {
-      "name": "add_alarm_off_everyday",
-      "description": "Daily power-OFF alarm at 23:30",
+      "name": "rtc_set_2025-07-04_15-28-07",
+      "description": "RTC clock set two seconds later (mislabelled as an alarm until 2026-09-02)",
       "packet": "00:03:80:00:00:0c:0d:0b:10:14:19:07:04:0f:1c:07:05:00:0f:8e",
-      "params": { "time": "23:30", "repeat": "Mon-Sun", "enabled": true }
+      "params": { "date": "2025-07-04", "time": "15:28:07", "dow": 5 }
     },
     {
       "name": "set_effect_seven_color_cross_fade_b16_s37",
@@ -326,8 +327,8 @@
       }
     },
     {
-      "name": "vendor_prelude_A_seq04",
-      "description": "Short utility command before table write (ACK visible)",
+      "name": "read_timer_table_seq04",
+      "description": "Read request for the timer table; device answers on FF02 with the 0F22 dump (was mislabelled a vendor prelude)",
       "packet": "00:04:80:00:00:05:06:0a:22:2a:2b:0f:86",
       "decode": {
         "seq": 4,
@@ -338,8 +339,8 @@
       }
     },
     {
-      "name": "vendor_prelude_B_seq05",
-      "description": "Short utility command before table write (ACK visible)",
+      "name": "read_rtc_clock_seq05",
+      "description": "Read request for the RTC clock; device answers on FF02 with the 0F11 dump (was mislabelled a vendor prelude)",
       "packet": "00:05:80:00:00:05:06:0a:11:1a:1b:0f:55",
       "decode": {
         "seq": 5,

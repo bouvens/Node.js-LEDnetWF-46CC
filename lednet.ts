@@ -618,13 +618,12 @@ function parseConfig(argv: CLIArgs, config: AppConfig): ParseConfigResult {
       if (argv['alarm-on']) {
         const entries = parseAlarmEntry(argv['alarm-on']);
         entries.forEach((entry) => {
-          basicAlarms.push(
-            buildBasicAlarmEntry(
+          effectAlarms.push(
+            buildEffectAlarmEntry(
               entry.repeatMask,
               entry.hour,
               entry.minute,
-              entry.brightness,
-              0,
+              PROTOCOL.ALARM_ACTIONS.POWER_ON,
             ),
           );
         });
