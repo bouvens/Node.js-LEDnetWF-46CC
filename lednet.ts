@@ -86,16 +86,15 @@ const USAGE_HELP = `Usage:
     --speed N            Candle speed 1-100% (default: 50)
     --brightness N       Candle brightness 1-100% (default: 100)
   
-  Alarm System (WARNING: Programming works, execution does NOT):
+  Alarm System:
     --alarm-on <format>      Set power ON alarm(s)
     --alarm-off <format>     Set power OFF alarm(s)
     --alarm-rgb <format>     Set RGB color alarm(s)
     --alarm-effect <format>  Set effect alarm(s)
     --alarm-clear <type>     Clear alarms (basic/effect/all)
 
-    KNOWN LIMITATION: Only OFF alarms tested. Alarms write successfully to device
-    memory and appear in the official app, but do NOT execute at scheduled times.
-    Repeat masks (days) may not work correctly. Root cause under investigation.
+    KNOWN LIMITATION: --alarm-off currently writes a power ON slot; the OFF
+    action encoding is not decoded yet.
 
     Alarm Format: HH:MM[,param][/days][#brightness][%speed][;next_alarm]
     
@@ -269,6 +268,7 @@ interface NobleCharacteristic {
   uuid: string;
   writeAsync(data: Buffer, withoutResponse: boolean): Promise<void>;
   subscribeAsync(): Promise<void>;
+  on(event: 'data', listener: (data: Buffer) => void): void;
 }
 
 interface NobleService {
@@ -428,6 +428,12 @@ const clamp = (
   }
   return Math.max(min, Math.min(max, parsed));
 };
+
+const ALARM_SLOT_SIZE = 14;
+const ALARM_SLOT_COUNT = 6;
+
+const isEffectId = (value: number): boolean =>
+  Object.values(PROTOCOL.EFFECTS).includes(value as EffectId);
 
 // Inverted, and above 0x23 the strip jumps between colors instead of fading.
 const EFFECT_SPEED_FASTEST_BYTE = 0x01;
@@ -859,6 +865,11 @@ async function enableNotifications(
 ): Promise<void> {
   if (rxCharacteristic) {
     try {
+      rxCharacteristic.on('data', (data: Buffer) => {
+        const text = data.toString('utf8').replace(/[^\x20-\x7e]/g, '');
+        const payload = text.match(/"payload":"([0-9A-Fa-f]+)"/)?.[1];
+        console.log(`📥 ${payload ?? data.toString('hex')}`);
+      });
       await rxCharacteristic.subscribeAsync();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
@@ -884,6 +895,21 @@ function buildPacketBase(
 ): Buffer {
   const seqByte = nextSequence();
   const checksum = (seqByte + checksumBase) & PROTOCOL.SEQUENCE_MASK;
+  return Buffer.concat([
+    Buffer.from([0, seqByte]),
+    header,
+    payload,
+    Buffer.from([checksum]),
+  ]);
+}
+
+// RTC, preludes and both timer tables checksum the payload instead of the sequence.
+function buildTablePacket(header: Buffer, payload: Buffer): Buffer {
+  const seqByte = nextSequence();
+  const checksum = payload.reduce(
+    (acc, byte) => (acc + byte) & PROTOCOL.SEQUENCE_MASK,
+    0,
+  );
   return Buffer.concat([
     Buffer.from([0, seqByte]),
     header,
@@ -918,25 +944,31 @@ const buildEffectPacket = (
   return buildPacketBase(HEADERS.EFFECT, payload, PROTOCOL.RGB_CHECKSUM_BASE);
 };
 
-// Build time synchronization packet
+// Build RTC set packet, mirroring the captured app packet byte for byte.
 const buildTimePacket = (date: Date = new Date()): Buffer => {
-  const hh = date.getHours();
-  const mm = date.getMinutes();
-  const ss = date.getSeconds();
-  const payload = Buffer.from([hh | 0x80, mm | 0x80, ss | 0x80]);
-  return buildPacketBase(HEADERS.TIME, payload, PROTOCOL.RGB_CHECKSUM_BASE);
+  const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay();
+  const payload = Buffer.from([
+    0x10,
+    0x14,
+    date.getFullYear() - 2000,
+    date.getMonth() + 1,
+    date.getDate(),
+    date.getHours(),
+    date.getMinutes(),
+    date.getSeconds(),
+    dayOfWeek,
+    0x00,
+    0x0f,
+  ]);
+  return buildTablePacket(HEADERS.BASIC_TIMER, payload);
 };
 
 // Build prelude sequence packets (vendor initialization)
-const buildPreludeAPacket = (): Buffer => {
-  const payload = toBuffer('222a2b0f');
-  return buildPacketBase(HEADERS.PRELUDE, payload, PROTOCOL.RGB_CHECKSUM_BASE);
-};
+const buildPreludeAPacket = (): Buffer =>
+  buildTablePacket(HEADERS.PRELUDE, toBuffer('222a2b0f'));
 
-const buildPreludeBPacket = (): Buffer => {
-  const payload = toBuffer('111a1b0f');
-  return buildPacketBase(HEADERS.PRELUDE, payload, PROTOCOL.RGB_CHECKSUM_BASE);
-};
+const buildPreludeBPacket = (): Buffer =>
+  buildTablePacket(HEADERS.PRELUDE, toBuffer('111a1b0f'));
 
 const buildCandlePacket = (
   amplitude = 2,
@@ -990,11 +1022,7 @@ const buildBasicAlarmEntry = (
   ]);
 };
 
-// Build effect alarm entry (87 bytes) - for RGB colors, effects, and OFF actions
-// Format per test-alarm-formats.js: F0 YY MM DD HH mm SS RR BR R G B 00 [zeros to 87 bytes]
-// - YY=0, MM=0, DD=0 indicates weekly/relative format (repeating alarm)
-// - YY/MM/DD set indicates absolute one-shot alarm
-// - RR is repeat mask (day of week bits or 0xFE for daily)
+// One 14-byte slot of the EFFECT_TIMER table, mirroring the captured app packets.
 const buildEffectAlarmEntry = (
   dowMask: number,
   hour: number,
@@ -1008,43 +1036,26 @@ const buildEffectAlarmEntry = (
     speed?: number;
   } = {},
 ): Buffer => {
-  const entry = Buffer.alloc(87, 0);
-  entry[0] = 0xf0; // Slot marker
-  entry[1] = 0x00; // YY = 0 for weekly/relative format
-  entry[2] = 0x00; // MM = 0
-  entry[3] = 0x00; // DD = 0
+  const entry = Buffer.alloc(ALARM_SLOT_SIZE, 0);
+  entry[0] = 0xf0;
   entry[4] = hour & 0xff;
   entry[5] = minute & 0xff;
-  entry[6] = 0x00; // SS (seconds/reserved)
-  entry[7] = dowMask & 0xff; // RR = repeat mask
+  // The firmware stores the repeat mask shifted one bit left.
+  entry[7] = (dowMask << 1) & 0xff;
 
-  // Fill parameters based on action type
   if (actionType === PROTOCOL.ALARM_ACTIONS.RGB) {
-    // RGB format: BR, R, G, B (brightness as byte 8)
     const { r = 255, g = 255, b = 255, brightness = 100 } = actionParams;
-    entry[8] = clamp(brightness, 1, 100); // BR = brightness
-    entry[9] = clamp(r, 0, 255); // R
-    entry[10] = clamp(g, 0, 255); // G
-    entry[11] = clamp(b, 0, 255); // B
-    entry[12] = 0x00; // tail byte
-  } else if (actionType === PROTOCOL.ALARM_ACTIONS.POWER_OFF) {
-    // OFF format: BR=0, R=0, G=0, B=0 (darkness = OFF)
-    entry[8] = 0x00; // BR = 0 (dark = OFF)
-    entry[9] = 0x00; // R
-    entry[10] = 0x00; // G
-    entry[11] = 0x00; // B
-    entry[12] = 0x00; // tail byte
-  } else if (actionType >= 0x38 && actionType <= 0x4c) {
-    // Effect format: for now, use same RGB-like structure
-    // TODO: verify effect format in captures
-    const { speed = 50, brightness = 100 } = actionParams;
     entry[8] = clamp(brightness, 1, 100);
-    entry[9] = actionType; // Store effect ID in R channel (tentative)
-    entry[10] = clamp(speed, 1, 100);
-    entry[11] = 0x00;
-    entry[12] = 0x00;
+    entry[9] = clamp(r, 0, 255);
+    entry[10] = clamp(g, 0, 255);
+    entry[11] = clamp(b, 0, 255);
+  } else if (isEffectId(actionType)) {
+    const { speed = 50 } = actionParams;
+    entry[8] = actionType;
+    entry[9] = effectSpeedByte(clamp(speed, 1, 100));
   }
 
+  entry[13] = 0xf0;
   return entry;
 };
 
@@ -1055,33 +1066,32 @@ const buildBasicAlarmPacket = (alarmEntries: Buffer[]): Buffer => {
     alarmEntries.length > 0 ? alarmEntries : [Buffer.alloc(8, 0)],
   );
   const payload = Buffer.concat([tableMarker, entries]);
-  return buildPacketBase(
-    HEADERS.BASIC_TIMER,
-    payload,
-    PROTOCOL.RGB_CHECKSUM_BASE,
-  );
+  return buildTablePacket(HEADERS.BASIC_TIMER, payload);
 };
 
-// Build complete effect alarm table packet
-// EFFECT_TIMER expects a single 87-byte payload, not multiple entries
-// If multiple entries provided, only the first is used
 const buildEffectAlarmPacket = (alarmEntries: Buffer[]): Buffer => {
-  let payload;
-  if (alarmEntries.length > 0) {
-    payload = alarmEntries[0]; // Use first entry only
-    if (alarmEntries.length > 1) {
-      console.warn(
-        `⚠️ EFFECT_TIMER supports only 1 slot, using first of ${alarmEntries.length} entries`,
-      );
-    }
-  } else {
-    payload = Buffer.alloc(87, 0); // Empty 87-byte slot
+  if (alarmEntries.length > ALARM_SLOT_COUNT) {
+    console.warn(
+      `⚠️ EFFECT_TIMER holds ${ALARM_SLOT_COUNT} slots, using first ${ALARM_SLOT_COUNT} of ${alarmEntries.length} entries`,
+    );
   }
-  return buildPacketBase(
-    HEADERS.EFFECT_TIMER,
-    payload,
-    PROTOCOL.RGB_CHECKSUM_BASE,
-  );
+
+  const slots = Array.from({ length: ALARM_SLOT_COUNT }, (_unused, index) => {
+    const entry = alarmEntries[index];
+    if (entry) {
+      return entry;
+    }
+    const empty = Buffer.alloc(ALARM_SLOT_SIZE, 0);
+    empty[0] = 0x0f;
+    return empty;
+  });
+
+  const payload = Buffer.concat([
+    Buffer.from([0x21]),
+    ...slots,
+    Buffer.from([0x00, 0xf0]),
+  ]);
+  return buildTablePacket(HEADERS.EFFECT_TIMER, payload);
 };
 
 function buildPacket(operation: Operation): Buffer {
@@ -1185,6 +1195,7 @@ async function sendPacket(
 async function connectAndExecute(
   peripheral: NoblePeripheral,
   operations: Operation[],
+  query = false,
 ): Promise<void> {
   console.log(
     `🔗 Connecting to ${peripheral.advertisement.localName || peripheral.id}…`,
@@ -1244,6 +1255,18 @@ async function connectAndExecute(
         'PRELUDE B (commit)',
       );
       await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+  }
+
+  if (query) {
+    const probes: [string, Buffer][] = [
+      ['STATE 818a8b', buildTablePacket(HEADERS.TIME, toBuffer('818a8b'))],
+      ['TABLE 222a2b', buildTablePacket(HEADERS.PRELUDE, toBuffer('222a2b0f'))],
+      ['TABLE 111a1b', buildTablePacket(HEADERS.PRELUDE, toBuffer('111a1b0f'))],
+    ];
+    for (const [label, packet] of probes) {
+      await sendRawPacket(txCharacteristic, packet, label);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
     }
   }
 
@@ -1327,7 +1350,7 @@ function main(): void {
     clearTimeout(bailout);
     noble.stopScanning();
 
-    await connectAndExecute(peripheral, operations);
+    await connectAndExecute(peripheral, operations, Boolean(argv.query));
   });
 
   if (argv['discover-all']) {

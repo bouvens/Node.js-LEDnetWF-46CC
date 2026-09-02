@@ -113,17 +113,63 @@ _(Effect IDs listed in Appendix A for reference.)_
 - `dowMask` - bit 0 = Mon, bit 6 = Sun; `0x00` = disabled; `0x80` = one-shot.
 - Brightness & speed - 0-100 (0-0x64).
 
-### RGB/Effect (header `58 59 0B`)
+### RGB/Effect timer table (header `58 59 0B`) - verified 2026-09-02
+
+The payload is a fixed 87-byte table, **not** a single record:
 
 ```
-[dowMask] [HH] [MM] [type] ...rest... 00 F0
+[0x21] [6 slots x 14 B] [0x00 0xF0]
 ```
 
-- `type` - `0x0F` = static RGB, `0xF0` = power OFF, `0x22-0x4C` = effect ID.
-- For RGB -> `R G B brightness`.
-- For effect -> `ID speed brightness`.
+Slot layout:
 
-The controller stores **16 slots per table** and overwrites the oldest one when full.
+```
+[0]      F0 = enabled, 0F = disabled   (toggling the alarm off in the app flips this byte)
+[1..3]   YY MM DD   (all zero = repeating alarm; set = one-shot on that date)
+[4..6]   HH MM SS
+[7]      repeat mask SHIFTED LEFT BY ONE BIT (0xFE = daily)
+[8..12]  action
+[13]     F0
+```
+
+Action encodings:
+
+| Bytes 8..12       | Meaning                                              |
+| ----------------- | ---------------------------------------------------- |
+| `00 00 00 00 00`  | **power ON** - the app labels such a slot «Включать» |
+| `BR R G B 00`     | static RGB at brightness BR                          |
+| `ID SPD 00 00 00` | built-in effect                                      |
+
+Power OFF encoding is still unknown - no capture and no app-written slot with
+it has been read back yet.
+
+The repeat mask being shifted one bit left explains the old "weekly alarms show
+wrong days" complaint: writing `0x7F` unshifted is a different day set entirely.
+
+**Alarms do execute.** Verified 2026-09-02: a daily ON alarm written by this
+tool fired at the scheduled minute on a strip that was powered off. The old
+"alarms never execute" note was wrong; the real causes were all on our side —
+wrong checksum, a "time sync" that queried state instead of setting the RTC,
+and a table written without the `0x21` prefix (shifting every field by one byte)
+with an unshifted repeat mask.
+
+### Reading state back from the device (no packet capture needed)
+
+The packets previously labelled "vendor prelude" are in fact **read requests**.
+Enable notifications on FF02, write the request, and the device answers on FF02
+with a JSON envelope whose `payload` field holds the raw hex:
+
+| Request (header + payload) | Answers with                                 |
+| -------------------------- | -------------------------------------------- |
+| `04 05 0A` + `81 8A 8B`    | current state (power, mode, brightness, RGB) |
+| `05 06 0A` + `22 2A 2B 0F` | **the whole timer table**, prefixed `0F 22`  |
+| `05 06 0A` + `11 1A 1B 0F` | **the RTC clock**, prefixed `0F 11`          |
+
+Clock answer: `0F 11 14 YY MM DD HH MM SS DOW`.
+
+This is the fastest way to verify a write: set an alarm, read the table back,
+compare bytes. It also reads what the official app wrote, which removes the
+need for a Bluetooth capture in most cases.
 
 ## Edge cases & gotchas
 

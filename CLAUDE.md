@@ -116,35 +116,31 @@ Format: JSON payload with hex-encoded device state (14 bytes). See [investigatio
 
 #### Alarm System Status and Limitations
 
-**Current Status:**
+**Current Status (verified 2026-09-02 on hardware):**
 
-- ✅ Alarm **programming** works - alarms are written to device memory
-- ✅ Alarms appear in Zengge app
-- ✅ RTC (real-time clock) synchronization is reliable
-- ✅ Device acknowledges alarm table updates (confirmed via `0F22` response dumps in notifications)
-- ❌ Alarms **do not execute** at the scheduled time (device does not trigger actions)
+- ✅ Alarms **execute** - a daily ON alarm fired at the scheduled minute on a powered-off strip
+- ✅ EFFECT_TIMER table format decoded and confirmed by reading it back from the device
+- ✅ RTC set packet corrected (the old one queried state instead of setting the clock)
+- ✅ Checksums for RTC / table / read requests are the **sum of the payload**, not `seq + bias`
+- ❌ Power OFF action encoding still unknown
 
-**What Works:**
+**Root cause of the old "alarms never execute" report** - three bugs, all ours:
 
-- Writing BASIC_TIMER (8-byte entries) for simple power on/off
-- Time synchronization via RTC packets
+1. Table checksum used `seq + 0x38`; the device wants the payload sum.
+2. `--time-sync` sent `04 05 0A | 81 8A 8B`, which is a **state query**, so the RTC was never set.
+3. The table was written without its `0x21` prefix, shifting every field one byte, and the repeat mask was not shifted left by one bit.
 
-**Known Issues:**
+**Reading state back (use this instead of packet capture):**
 
-- **Only OFF alarms tested** - ON/RGB/effect alarms not verified
-- Device accepts alarm table updates but **does not execute them**
-- **Repeat masks (days) may be incorrect** - weekly alarms show wrong days in app UI
-- Commit "nudges" (additional preludes after EFFECT_TIMER) do not trigger execution
+Enable notifications on FF02, then write a read request and the device answers:
 
-**Implementation Uncertainty:**
+- `05 06 0A | 22 2A 2B 0F` -> the whole timer table (`0F 22` prefix)
+- `05 06 0A | 11 1A 1B 0F` -> the RTC clock (`0F 11` prefix)
+- `04 05 0A | 81 8A 8B` -> current power/mode/brightness/RGB
 
-The current implementation includes prelude sequences (A/B) and commit nudges copied from [test-alarm-formats.js](test-alarm-formats.js), but **we cannot confirm which packets are actually necessary** since we haven't achieved a working alarm configuration yet. Until we reproduce successful alarm execution, we cannot determine:
-
-- Whether both PRELUDE A and B are required
-- If the timing delays (180ms/120ms) are necessary
-- Which packet sequences are essential vs. cargo-cult from captures
-
-The code includes these elements defensively until a working configuration is identified.
+The packets formerly labelled "vendor preludes" are these read requests, not an
+initialization handshake. This also reads back what the official app wrote, so
+the app itself can be used as a reference implementation without sniffing BLE.
 
 ### Testing Device Communication
 

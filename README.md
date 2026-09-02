@@ -199,6 +199,7 @@ The project implements the communication protocol for LEDnetWF V5 LED strip cont
 ### Example Packet Formats
 
 **Power ON/OFF**:
+
 ```
   fixed (0x00)
   |  sequence (wraps 0-255)
@@ -213,6 +214,7 @@ The project implements the communication protocol for LEDnetWF V5 LED strip cont
 ```
 
 **Static RGB** (Red = 255, Green = 0, Blue = 0):
+
 ```
   fixed
   |  sequence
@@ -229,6 +231,7 @@ The project implements the communication protocol for LEDnetWF V5 LED strip cont
 ```
 
 **Effect** (Seven-color cross-fade, ID=0x25, speed=37%, brightness=16%):
+
 ```
   fixed
   |  sequence
@@ -244,6 +247,7 @@ The project implements the communication protocol for LEDnetWF V5 LED strip cont
 ```
 
 **Candle mode** (Orange: R=255, G=123, B=0, speed=31, brightness=75, amplitude=3):
+
 ```
   fixed
   |  sequence
