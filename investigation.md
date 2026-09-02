@@ -18,9 +18,10 @@
 
 - `SEQ` - monotonic 8-bit counter, persisted between sessions.
 - `LEN` - payload length (1 byte).
-- `CHK` - simple checksum calculated as **`(SEQ + bias) & 0xFF`** where bias depends on the command family:
-  - Power / WAKE / timers -> `bias = 0x26`
-  - RGB / Effects / Candle / Time -> `bias = 0x38`
+- `CHK` - two different rules, depending on the command family:
+  - Power / WAKE -> `(SEQ + 0x26) & 0xFF`
+  - RGB / Effects / Candle -> `(SEQ + 0x38) & 0xFF`
+  - **RTC, timer tables and read requests -> `sum(payload) & 0xFF`** (verified against every captured table packet)
 
 **Checksum Examples:**
 
@@ -52,15 +53,16 @@ Info: Treat these packets as **state synchronisation** performed by the mobile a
 
 ## Command families
 
-| Header (after 80 00 00) | Purpose              | Payload format                             | CHK bias |
-| ----------------------- | -------------------- | ------------------------------------------ | -------- |
-| **`0D 0E 0B 3B`**       | Power ON / OFF       | `23/24 [10x00]` (21 B total)               | `0x26`   |
-| **`08 09 0B 31`**       | Static RGB           | `R G B 00 00 0F` (16 B)                    | `0x38`   |
-| **`05 06 0B 38`**       | Built-in Effect      | `effectID timeout brightness`              | `0x38`   |
-| **`09 0A 0B 39 D1`**    | Candle               | `R G B invertedSpeed brightness amplitude` | `0x38`   |
-| **`04 05 0A`**          | Time sync            | `hh mm ss` (BCD)                           | `0x38`   |
-| **`0C 0D 0B`**          | Basic timer (ON/OFF) | 8 B record x N                             | `0x26`   |
-| **`58 59 0B`**          | RGB/Effect timer     | 16 B record x N                            | `0x26`   |
+| Header (after 80 00 00) | Purpose            | Payload format                             | CHK bias    |
+| ----------------------- | ------------------ | ------------------------------------------ | ----------- |
+| **`0D 0E 0B 3B`**       | Power ON / OFF     | `23/24 [10x00]` (21 B total)               | `0x26`      |
+| **`08 09 0B 31`**       | Static RGB         | `R G B 00 00 0F` (16 B)                    | `0x38`      |
+| **`05 06 0B 38`**       | Built-in Effect    | `effectID timeout brightness`              | `0x38`      |
+| **`09 0A 0B 39 D1`**    | Candle             | `R G B invertedSpeed brightness amplitude` | `0x38`      |
+| **`04 05 0A`**          | State query        | `81 8A 8B`                                 | payload sum |
+| **`05 06 0A`**          | Read table / clock | `22 2A 2B 0F` / `11 1A 1B 0F`              | payload sum |
+| **`0C 0D 0B`**          | RTC set            | `10 14 YY MM DD HH MM SS DOW 00 0F`        | payload sum |
+| **`58 59 0B`**          | Timer table        | 87 B table (see below)                     | payload sum |
 
 Candle speed is inverted like the effect speed, but its usable range is the
 full `0x01-0x64` (verified on hardware: `0x01` very fast, `0x1F` and `0x23`
@@ -128,23 +130,28 @@ Slot layout:
 [1..3]   YY MM DD   (all zero = repeating alarm; set = one-shot on that date)
 [4..6]   HH MM SS
 [7]      repeat mask SHIFTED LEFT BY ONE BIT (0xFE = daily)
-[8..12]  action
-[13]     F0
+[8..12]  action payload
+[13]     F0 = power ON, 0F = power OFF
 ```
 
-Action encodings:
+Action payload:
 
-| Bytes 8..12       | Meaning                                              |
-| ----------------- | ---------------------------------------------------- |
-| `00 00 00 00 00`  | **power ON** - the app labels such a slot «Включать» |
-| `BR R G B 00`     | static RGB at brightness BR                          |
-| `ID SPD 00 00 00` | built-in effect                                      |
+| Bytes 8..12       | Meaning                     |
+| ----------------- | --------------------------- |
+| `00 00 00 00 00`  | plain power on/off          |
+| `BR R G B 00`     | static RGB at brightness BR |
+| `ID SPD 00 00 00` | built-in effect             |
 
-Power OFF encoding is still unknown - no capture and no app-written slot with
-it has been read back yet.
+Both ON and OFF slots carry an all-zero action payload; only byte 13 tells them
+apart. Read back from the device 2026-09-02: an OFF alarm created in the app
+came back as `F0 000000 1205 00 56 0000000000 0F`.
 
-The repeat mask being shifted one bit left explains the old "weekly alarms show
-wrong days" complaint: writing `0x7F` unshifted is a different day set entirely.
+Repeat mask, same read: the app slot for Mon/Tue/Thu/Sat is `0x56`, and
+`0x56 >> 1 = 0b0101011` = bits 0,1,3,5. So bit 0 is **Monday** and the whole
+mask is stored shifted one bit left - even though the app's own UI starts the
+week on Sunday. Writing `0x7F` unshifted, as the code used to, is a different
+day set entirely, which is what the old "weekly alarms show wrong days" note was
+really about.
 
 **Alarms do execute.** Verified 2026-09-02: a daily ON alarm written by this
 tool fired at the scheduled minute on a strip that was powered off. The old

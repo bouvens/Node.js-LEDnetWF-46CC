@@ -1055,7 +1055,8 @@ const buildEffectAlarmEntry = (
     entry[9] = effectSpeedByte(clamp(speed, 1, 100));
   }
 
-  entry[13] = 0xf0;
+  // Trailing byte picks the action: F0 powers the strip on, 0F powers it off.
+  entry[13] = actionType === PROTOCOL.ALARM_ACTIONS.POWER_OFF ? 0x0f : 0xf0;
   return entry;
 };
 
