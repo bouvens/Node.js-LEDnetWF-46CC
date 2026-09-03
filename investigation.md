@@ -189,6 +189,11 @@ This is the fastest way to verify a write: set an alarm, read the table back,
 compare bytes. It also reads what the official app wrote, which removes the
 need for a Bluetooth capture in most cases.
 
+Writing an alarm needs exactly two packets - the RTC set and the table. The read
+requests the app fires around a table write are not a prerequisite, and neither
+are the delays that used to surround it (verified 2026-09-03 by removing them and
+watching two alarms fire).
+
 ## Edge cases & gotchas
 
 1. **Bonding lock-up** - If the strip is still bonded to the Android app, it will ignore new centrals. Kill the app or toggle phone BT.

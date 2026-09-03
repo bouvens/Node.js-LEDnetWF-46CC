@@ -1177,36 +1177,8 @@ async function connectAndExecute(
 
   await enableNotifications(rxCharacteristic);
 
-  // Send operations with prelude sequences for alarm operations
-  for (let i = 0; i < operations.length; i++) {
-    const operation = operations[i];
-
-    const isAlarmWrite = operation.type === 'alarm';
-
-    if (operation.type === 'time' || (isAlarmWrite && i === 0)) {
-      await sendRawPacket(
-        txCharacteristic,
-        buildReadAlarmsPacket(),
-        'READ ALARMS',
-      );
-      await sendRawPacket(
-        txCharacteristic,
-        buildReadClockPacket(),
-        'READ CLOCK',
-      );
-    }
-
+  for (const operation of operations) {
     await sendPacket(txCharacteristic, operation);
-
-    if (isAlarmWrite) {
-      await new Promise((resolve) => setTimeout(resolve, 180));
-      await sendRawPacket(
-        txCharacteristic,
-        buildReadClockPacket(),
-        'READ CLOCK',
-      );
-      await new Promise((resolve) => setTimeout(resolve, 120));
-    }
   }
 
   if (query) {

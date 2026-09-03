@@ -135,6 +135,13 @@ no capture behind it, and its "format" was most likely derived from the two
 RTC-set packets that `raw-packets.json` mislabelled as daily alarms. Removed;
 that header is the clock and nothing else.
 
+**The preludes and the commit nudge were unnecessary.** Writing an alarm used to
+send two read requests first, then the table, then a 180 ms pause, another read
+and a 120 ms pause - all copied from `test-alarm-formats.js`. Removed all of it:
+an alarm written with just two packets (RTC set + table) fired correctly twice in
+a row, observed on a strip that was off. Only the clock write and the table write
+are needed.
+
 **Alarms are not the app's timers.** The app also offers gradual on/off over a
 duration (10 s - 30 min) and delayed switching. A pending 10-minute gradual
 switch-on was **not** present in an alarm-table read taken before it completed,
