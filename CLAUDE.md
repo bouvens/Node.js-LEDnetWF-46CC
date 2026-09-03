@@ -116,10 +116,15 @@ Format: JSON payload with hex-encoded device state (14 bytes). See [investigatio
 
 #### Alarm System Status and Limitations
 
+**Alarms are not timers.** In the app, an _alarm_ switches the strip at a
+wall-clock time on chosen weekdays and lives in the `58 59 0B` table. A _timer_ is
+the gradual fade on/off over a duration plus delayed switching - it does not
+appear in that table and is not implemented here. Keep the terms apart.
+
 **Current Status (verified 2026-09-02 on hardware):**
 
 - ✅ Alarms **execute** - a daily ON alarm fired at the scheduled minute on a powered-off strip
-- ✅ EFFECT_TIMER table format decoded and confirmed by reading it back from the device
+- ✅ Alarm table format decoded and confirmed by reading it back from the device
 - ✅ RTC set packet corrected (the old one queried state instead of setting the clock)
 - ✅ Checksums for RTC / table / read requests are the **sum of the payload**, not `seq + bias`
 - ❌ Power OFF action encoding still unknown

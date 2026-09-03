@@ -104,18 +104,24 @@ choppy — judge the animation about 10 s after the write, not during it.
 
 _(Effect IDs listed in Appendix A for reference.)_
 
-## Timer record layouts
+## Alarms vs timers
 
-### Basic ON/OFF (header `0C 0D 0B`)
+The app exposes two unrelated things, and mixing them up cost real debugging time:
 
-```
-[0x14] [dowMask] [HH] [MM] [brightness] [speed] 00 0F
-```
+- **Alarms** - "включать / выключать" at a wall-clock time on chosen weekdays.
+  These live in the table below and are what this tool writes.
+- **Timers** - gradual fade on/off over a chosen duration (10 s to 30 min) and
+  delayed switching. **They do not appear in the alarm table**: a 10-minute
+  gradual switch-on created in the app was invisible in a table read taken while
+  it was still pending. Where they are stored, or whether they are stored at all
+  rather than driven live, is unknown.
 
-- `dowMask` - bit 0 = Mon, bit 6 = Sun; `0x00` = disabled; `0x80` = one-shot.
-- Brightness & speed - 0-100 (0-0x64).
+A "basic timer" record (`0C 0D 0B` with a `0x14` marker) was described in earlier
+notes and implemented in the code. It never worked, and no capture of it exists -
+the format appears to have been reverse-engineered out of two RTC-set packets that
+were mislabelled as alarms. It has been removed; `0C 0D 0B` is the clock.
 
-### RGB/Effect timer table (header `58 59 0B`) - verified 2026-09-02
+## Alarm table (header `58 59 0B`) - verified 2026-09-02
 
 The payload is a fixed 87-byte table, **not** a single record:
 

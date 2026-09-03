@@ -58,7 +58,7 @@ const USAGE_HELP = `Usage:
   node lednet.js --alarm-off <format>
   node lednet.js --alarm-rgb <format>
   node lednet.js --alarm-effect <format>
-  node lednet.js --alarm-clear <type>
+  node lednet.js --alarm-clear
   node lednet.js --time-sync
   node lednet.js -d | --discover-all   (scan all devices)
   
@@ -91,7 +91,7 @@ const USAGE_HELP = `Usage:
     --alarm-off <format>     Set power OFF alarm(s)
     --alarm-rgb <format>     Set RGB color alarm(s)
     --alarm-effect <format>  Set effect alarm(s)
-    --alarm-clear <type>     Clear alarms (basic/effect/all)
+    --alarm-clear            Clear every alarm slot
 
     All four alarm actions are verified on hardware. Note that an RGB alarm
     keeps the strip's current brightness: #N is ignored for --alarm-rgb.
@@ -129,10 +129,14 @@ const USAGE_HELP = `Usage:
       ;         - Separator for multiple alarms
     
     Clear alarms:
-      --alarm-clear basic   Clear only basic (power on) alarms  
-      --alarm-clear effect  Clear only effect (power off/RGB/effect) alarms
-      --alarm-clear all     Clear all alarms
-    
+      --alarm-clear         Wipe all six alarm slots
+
+    The strip stores at most 6 alarms. Writing alarms replaces the whole table,
+    so pass every alarm you want to keep in a single invocation.
+
+    Note: the app's "timers" (gradual on/off over a set duration, delayed
+    switching) are a separate mechanism and do not appear in this table.
+
     Note: Alarm operations automatically sync time before setting schedule.
     Default alarms can be configured in config.json under defaults.alarms section.
   
@@ -165,9 +169,8 @@ const USAGE_HELP = `Usage:
     node lednet.js --name LEDnetWF --alarm-rgb "20:00,255,0,0;21:00,0,255,0;22:00,0,0,255"  # RGB sequence
     
     # Clear alarms
-    node lednet.js --name LEDnetWF --alarm-clear all
-    node lednet.js --name LEDnetWF --alarm-clear basic
-    
+    node lednet.js --name LEDnetWF --alarm-clear
+
     # Manual time sync
     node lednet.js --name LEDnetWF --time-sync  # Applies config alarms if present
     
@@ -247,16 +250,14 @@ type CandleOperation = {
   green: number;
   blue: number;
 };
-type BasicAlarmOperation = { type: 'basic-alarm'; entries: Buffer[] };
-type EffectAlarmOperation = { type: 'effect-alarm'; entries: Buffer[] };
+type AlarmOperation = { type: 'alarm'; entries: Buffer[] };
 type Operation =
   | PowerOperation
   | RgbOperation
   | EffectOperation
   | TimeOperation
   | CandleOperation
-  | BasicAlarmOperation
-  | EffectAlarmOperation;
+  | AlarmOperation;
 
 interface ParseConfigResult {
   wantedId?: string;
@@ -312,9 +313,9 @@ type ProtocolHeader =
   | 'TIME'
   | 'EFFECT'
   | 'CANDLE'
-  | 'BASIC_TIMER'
-  | 'EFFECT_TIMER'
-  | 'PRELUDE';
+  | 'CLOCK'
+  | 'ALARM_TABLE'
+  | 'READ';
 const PROTOCOL_HEADERS: Record<ProtocolHeader, string> = {
   POWER: '80 00 00 0D 0E 0B 3B',
   RGB: '80 00 00 08 09 0B 31',
@@ -322,9 +323,9 @@ const PROTOCOL_HEADERS: Record<ProtocolHeader, string> = {
 
   EFFECT: '80 00 00 05 06 0B 38',
   CANDLE: '80 00 00 09 0A 0B 39 D1',
-  BASIC_TIMER: '80 00 00 0C 0D 0B',
-  EFFECT_TIMER: '80 00 00 58 59 0B',
-  PRELUDE: '80 00 00 05 06 0A', // Vendor prelude sequence
+  CLOCK: '80 00 00 0C 0D 0B',
+  ALARM_TABLE: '80 00 00 58 59 0B',
+  READ: '80 00 00 05 06 0A',
 };
 
 const toBuffer = (hexString: string): Buffer =>
@@ -597,25 +598,13 @@ function parseConfig(argv: CLIArgs, config: AppConfig): ParseConfigResult {
       operations.push({ type: 'time', date: new Date() });
     }
 
-    const basicAlarms: Buffer[] = [];
     const effectAlarms: Buffer[] = [];
 
-    // Clear alarms if requested
     if (argv['alarm-clear']) {
-      const clearType =
-        argv['alarm-clear'] === true ? 'all' : argv['alarm-clear']; // Default to 'all' if just --alarm-clear flag
-      if (clearType === 'basic' || clearType === 'all') {
-        operations.push({ type: 'basic-alarm', entries: [] });
-      }
-      if (clearType === 'effect' || clearType === 'all') {
-        operations.push({ type: 'effect-alarm', entries: [] });
-      }
+      operations.push({ type: 'alarm', entries: [] });
     }
 
-    // Only process individual alarms if not clearing all
-    const clearType =
-      argv['alarm-clear'] === true ? 'all' : argv['alarm-clear'];
-    if (!argv['alarm-clear'] || clearType !== 'all') {
+    if (!argv['alarm-clear']) {
       // Power ON alarms
       if (argv['alarm-on']) {
         const entries = parseAlarmEntry(argv['alarm-on']);
@@ -733,12 +722,8 @@ function parseConfig(argv: CLIArgs, config: AppConfig): ParseConfigResult {
         });
       }
 
-      // Add alarm operations
-      if (basicAlarms.length > 0) {
-        operations.push({ type: 'basic-alarm', entries: basicAlarms });
-      }
       if (effectAlarms.length > 0) {
-        operations.push({ type: 'effect-alarm', entries: effectAlarms });
+        operations.push({ type: 'alarm', entries: effectAlarms });
       }
     }
   }
@@ -816,8 +801,8 @@ function parseConfig(argv: CLIArgs, config: AppConfig): ParseConfigResult {
     operations.push({ type: 'power', on: false });
   }
 
-  // If no operations specified, default to power on
-  if (operations.length === 0) {
+  // If no operations specified, default to power on - but --query is a read-only probe.
+  if (operations.length === 0 && !argv.query) {
     operations.push({ type: 'power', on: true });
   }
 
@@ -961,15 +946,15 @@ const buildTimePacket = (date: Date = new Date()): Buffer => {
     0x00,
     0x0f,
   ]);
-  return buildTablePacket(HEADERS.BASIC_TIMER, payload);
+  return buildTablePacket(HEADERS.CLOCK, payload);
 };
 
 // Build prelude sequence packets (vendor initialization)
-const buildPreludeAPacket = (): Buffer =>
-  buildTablePacket(HEADERS.PRELUDE, toBuffer('222a2b0f'));
+const buildReadAlarmsPacket = (): Buffer =>
+  buildTablePacket(HEADERS.READ, toBuffer('222a2b0f'));
 
-const buildPreludeBPacket = (): Buffer =>
-  buildTablePacket(HEADERS.PRELUDE, toBuffer('111a1b0f'));
+const buildReadClockPacket = (): Buffer =>
+  buildTablePacket(HEADERS.READ, toBuffer('111a1b0f'));
 
 const buildCandlePacket = (
   amplitude = 2,
@@ -1003,27 +988,7 @@ const buildCandlePacket = (
   return buildPacketBase(header, payload, PROTOCOL.RGB_CHECKSUM_BASE);
 };
 
-// Build basic alarm entry (8 bytes) - for simple power on/off actions
-const buildBasicAlarmEntry = (
-  dowMask: number,
-  hour: number,
-  minute: number,
-  brightness: number = 100,
-  speed: number = 0,
-): Buffer => {
-  return Buffer.from([
-    dowMask, // Days of week mask
-    hour,
-    minute, // Time (24h format)
-    clamp(brightness, 0, 100, 100), // Brightness 0-100%
-    clamp(speed, 0, 100, 50), // Speed 0-100%
-    0x00,
-    0x0f,
-    0x00, // Reserved bytes (to make 8 bytes total)
-  ]);
-};
-
-// One 14-byte slot of the EFFECT_TIMER table, mirroring the captured app packets.
+// One 14-byte slot of the alarm table, mirroring the captured app packets.
 const buildEffectAlarmEntry = (
   dowMask: number,
   hour: number,
@@ -1061,20 +1026,10 @@ const buildEffectAlarmEntry = (
   return entry;
 };
 
-// Build complete basic alarm table packet
-const buildBasicAlarmPacket = (alarmEntries: Buffer[]): Buffer => {
-  const tableMarker = Buffer.from([0x14]);
-  const entries = Buffer.concat(
-    alarmEntries.length > 0 ? alarmEntries : [Buffer.alloc(8, 0)],
-  );
-  const payload = Buffer.concat([tableMarker, entries]);
-  return buildTablePacket(HEADERS.BASIC_TIMER, payload);
-};
-
 const buildEffectAlarmPacket = (alarmEntries: Buffer[]): Buffer => {
   if (alarmEntries.length > ALARM_SLOT_COUNT) {
     console.warn(
-      `⚠️ EFFECT_TIMER holds ${ALARM_SLOT_COUNT} slots, using first ${ALARM_SLOT_COUNT} of ${alarmEntries.length} entries`,
+      `⚠️ The alarm table holds ${ALARM_SLOT_COUNT} slots, using first ${ALARM_SLOT_COUNT} of ${alarmEntries.length} entries`,
     );
   }
 
@@ -1093,7 +1048,7 @@ const buildEffectAlarmPacket = (alarmEntries: Buffer[]): Buffer => {
     ...slots,
     Buffer.from([0x00, 0xf0]),
   ]);
-  return buildTablePacket(HEADERS.EFFECT_TIMER, payload);
+  return buildTablePacket(HEADERS.ALARM_TABLE, payload);
 };
 
 function buildPacket(operation: Operation): Buffer {
@@ -1123,10 +1078,7 @@ function buildPacket(operation: Operation): Buffer {
       operation.blue,
     );
   }
-  if (operation.type === 'basic-alarm') {
-    return buildBasicAlarmPacket(operation.entries);
-  }
-  if (operation.type === 'effect-alarm') {
+  if (operation.type === 'alarm') {
     return buildEffectAlarmPacket(operation.entries);
   }
   const never: never = operation;
@@ -1179,15 +1131,9 @@ async function sendPacket(
         operation.speed
       }% brightness:${operation.brightness}% color:(${operation.red},${operation.green},${operation.blue}) (${packet.toString('hex')})`,
     );
-  } else if (operation.type === 'basic-alarm') {
+  } else if (operation.type === 'alarm') {
     console.log(
-      `📤 Sent BASIC ALARM table with ${
-        operation.entries.length
-      } entries (${packet.toString('hex')})`,
-    );
-  } else if (operation.type === 'effect-alarm') {
-    console.log(
-      `📤 Sent EFFECT ALARM table with ${
+      `📤 Sent ALARM table with ${
         operation.entries.length
       } entries (${packet.toString('hex')})`,
     );
@@ -1235,26 +1181,29 @@ async function connectAndExecute(
   for (let i = 0; i < operations.length; i++) {
     const operation = operations[i];
 
-    // Add prelude sequences before alarm writes (based on test-alarm-formats.js)
-    const isAlarmWrite =
-      operation.type === 'basic-alarm' || operation.type === 'effect-alarm';
-    const isTimeSync = operation.type === 'time';
+    const isAlarmWrite = operation.type === 'alarm';
 
-    if (isTimeSync || (isAlarmWrite && i === 0)) {
-      // Send prelude A + B before first alarm or after time sync
-      await sendRawPacket(txCharacteristic, buildPreludeAPacket(), 'PRELUDE A');
-      await sendRawPacket(txCharacteristic, buildPreludeBPacket(), 'PRELUDE B');
+    if (operation.type === 'time' || (isAlarmWrite && i === 0)) {
+      await sendRawPacket(
+        txCharacteristic,
+        buildReadAlarmsPacket(),
+        'READ ALARMS',
+      );
+      await sendRawPacket(
+        txCharacteristic,
+        buildReadClockPacket(),
+        'READ CLOCK',
+      );
     }
 
     await sendPacket(txCharacteristic, operation);
 
-    // After effect alarm writes, send prelude B again (commit nudge)
-    if (operation.type === 'effect-alarm') {
+    if (isAlarmWrite) {
       await new Promise((resolve) => setTimeout(resolve, 180));
       await sendRawPacket(
         txCharacteristic,
-        buildPreludeBPacket(),
-        'PRELUDE B (commit)',
+        buildReadClockPacket(),
+        'READ CLOCK',
       );
       await new Promise((resolve) => setTimeout(resolve, 120));
     }
@@ -1262,9 +1211,9 @@ async function connectAndExecute(
 
   if (query) {
     const probes: [string, Buffer][] = [
-      ['STATE 818a8b', buildTablePacket(HEADERS.TIME, toBuffer('818a8b'))],
-      ['TABLE 222a2b', buildTablePacket(HEADERS.PRELUDE, toBuffer('222a2b0f'))],
-      ['TABLE 111a1b', buildTablePacket(HEADERS.PRELUDE, toBuffer('111a1b0f'))],
+      ['STATE', buildTablePacket(HEADERS.TIME, toBuffer('818a8b'))],
+      ['ALARMS', buildReadAlarmsPacket()],
+      ['CLOCK', buildReadClockPacket()],
     ];
     for (const [label, packet] of probes) {
       await sendRawPacket(txCharacteristic, packet, label);
@@ -1294,7 +1243,15 @@ function main(): void {
       'alarm-effect',
       'alarm-clear',
     ],
-    boolean: ['on', 'off', 'help', 'discover-all', 'candle', 'time-sync'],
+    boolean: [
+      'on',
+      'off',
+      'help',
+      'discover-all',
+      'candle',
+      'time-sync',
+      'query',
+    ],
     alias: { h: 'help', d: 'discover-all' },
   });
 

@@ -130,9 +130,16 @@ Brightness is not carried in an RGB slot at all; the strip keeps whatever it had
 
 `--alarm-clear all` verified: the table reads back as six empty `0F` slots.
 
-**Still open.** BASIC_TIMER (`0C 0D 0B` with a `0x14` marker) has never been
-observed working, there is no capture of it, and nothing needs it now that the
-timer table handles ON, OFF, RGB and effects.
+**BASIC_TIMER was a phantom.** `0C 0D 0B` with a `0x14` marker never worked, had
+no capture behind it, and its "format" was most likely derived from the two
+RTC-set packets that `raw-packets.json` mislabelled as daily alarms. Removed;
+that header is the clock and nothing else.
+
+**Alarms are not the app's timers.** The app also offers gradual on/off over a
+duration (10 s - 30 min) and delayed switching. A pending 10-minute gradual
+switch-on was **not** present in an alarm-table read taken before it completed,
+so timers are stored elsewhere or not stored at all. Keep the two apart in code
+and docs.
 
 **Testing tip.** Use a fast effect speed when checking alarms in daylight - a
 slow fade is hard to tell from a static colour.
