@@ -93,8 +93,8 @@ const USAGE_HELP = `Usage:
     --alarm-effect <format>  Set effect alarm(s)
     --alarm-clear <type>     Clear alarms (basic/effect/all)
 
-    KNOWN LIMITATION: --alarm-off currently writes a power ON slot; the OFF
-    action encoding is not decoded yet.
+    All four alarm actions are verified on hardware. Note that an RGB alarm
+    keeps the strip's current brightness: #N is ignored for --alarm-rgb.
 
     Alarm Format: HH:MM[,param][/days][#brightness][%speed][;next_alarm]
     
@@ -370,6 +370,8 @@ const PROTOCOL = {
     WHITE_STROBE: 0x37,
     SEVEN_COLOR_JUMPING: 0x38,
   },
+
+  ALARM_MODE_STATIC_RGB: 0x61,
 
   ALARM_ACTIONS: {
     POWER_ON: 0x01,
@@ -1043,8 +1045,8 @@ const buildEffectAlarmEntry = (
   entry[7] = (dowMask << 1) & 0xff;
 
   if (actionType === PROTOCOL.ALARM_ACTIONS.RGB) {
-    const { r = 255, g = 255, b = 255, brightness = 100 } = actionParams;
-    entry[8] = clamp(brightness, 1, 100);
+    const { r = 255, g = 255, b = 255 } = actionParams;
+    entry[8] = PROTOCOL.ALARM_MODE_STATIC_RGB;
     entry[9] = clamp(r, 0, 255);
     entry[10] = clamp(g, 0, 255);
     entry[11] = clamp(b, 0, 255);

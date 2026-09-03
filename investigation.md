@@ -134,13 +134,18 @@ Slot layout:
 [13]     F0 = power ON, 0F = power OFF
 ```
 
-Action payload:
+Action payload - byte 8 is the **mode**, the same value the device reports in its
+state dump, and bytes 9..12 are its parameters:
 
-| Bytes 8..12       | Meaning                     |
-| ----------------- | --------------------------- |
-| `00 00 00 00 00`  | plain power on/off          |
-| `BR R G B 00`     | static RGB at brightness BR |
-| `ID SPD 00 00 00` | built-in effect             |
+| Bytes 8..12       | Meaning                                        | Tested        |
+| ----------------- | ---------------------------------------------- | ------------- |
+| `00 00 00 00 00`  | plain power on/off, keeps the last look        | ✅ 2026-09-02 |
+| `61 R G B 00`     | static RGB (`0x61` = static colour mode)       | ✅ 2026-09-03 |
+| `ID SPD 00 00 00` | built-in effect, SPD in the `0x01..0x23` scale | ✅ 2026-09-03 |
+
+Brightness is not part of an RGB slot; the strip keeps its current brightness.
+An earlier guess had byte 8 as brightness, which silently degraded to "just
+switch on with the previous colour" because `0x00`-`0x64` are not valid modes.
 
 Both ON and OFF slots carry an all-zero action payload; only byte 13 tells them
 apart. Read back from the device 2026-09-02: an OFF alarm created in the app

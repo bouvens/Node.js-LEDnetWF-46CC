@@ -109,6 +109,30 @@ Both ON and OFF carry an all-zero action payload; only byte 13 distinguishes
 them. `0x56 >> 1` = bits 0,1,3,5 = Mon,Tue,Thu,Sat, confirming bit 0 = Monday
 and the one-bit left shift - even though the app's UI starts the week on Sunday.
 
+## 2026-09-03 - RGB and effect alarm actions
+
+**Attempt 1** - byte 8 treated as brightness, `64 00 FF 00 00` for green at 100%.
+Alarm did not fire at all. Table read back unchanged, clock correct, so the slot
+was stored but the action was rejected.
+
+**Attempt 2** - reordered to `R G B BR` (`00 FF 00 64 00`). The strip **switched
+on but kept its previous colour** (purple, left over from the last candle run).
+So byte 8 was being read as something that made the slot mean "just power on".
+
+**Attempt 3** - byte 8 is the **mode**, matching the state dump: `0x61` is static
+colour. Sent `61 00 FF 00 00`; strip came on green, no candle. Confirmed.
+
+The same reading explains the effect slot from the old capture, `34 0B 00 00 00`:
+byte 8 is the effect ID, byte 9 its speed. Verified with `25 20 00 00 00` -
+fade7 at speed byte `0x20`, observed fading on a strip that was off.
+
+Brightness is not carried in an RGB slot at all; the strip keeps whatever it had.
+
+`--alarm-clear all` verified: the table reads back as six empty `0F` slots.
+
 **Still open.** BASIC_TIMER (`0C 0D 0B` with a `0x14` marker) has never been
-observed working and there is no capture of it; the RGB and effect actions inside
-a timer slot are decoded but not yet tested on hardware.
+observed working, there is no capture of it, and nothing needs it now that the
+timer table handles ON, OFF, RGB and effects.
+
+**Testing tip.** Use a fast effect speed when checking alarms in daylight - a
+slow fade is hard to tell from a static colour.
