@@ -16,20 +16,11 @@
 00 SEQ 80 00 00  <CMD-3B>  <LEN>  <PAYLOAD...>  CHK
 ```
 
-- `SEQ` - monotonic 8-bit counter, persisted between sessions.
+- `SEQ` - 8-bit counter; this tool restarts it at 0 on every run, the device does not care.
 - `LEN` - payload length (1 byte).
-- `CHK` - two different rules, depending on the command family:
-  - Power / WAKE -> `(SEQ + 0x26) & 0xFF`
-  - RGB / Effects / Candle -> `(SEQ + 0x38) & 0xFF`
-  - **RTC, timer tables and read requests -> `sum(payload) & 0xFF`** (verified against every captured table packet)
-
-**Checksum Examples:**
-
-- Power ON seq 0x38: `(0x38 + 0x26) & 0xFF = 0x5E` ✅
-- RGB Green seq 0x1B: `(0x1B + 0x38) & 0xFF = 0x53` ✅
-- RGB Red seq 0x23: `(0x23 + 0x38) & 0xFF = 0x5B` (but packet shows 0x3F - needs verification)
-
-- The controller silently accepts wrong checksums, but we keep them valid for sanity.
+- `CHK` - one rule for every packet: `sum(bytes after 80 00 00 LEN LEN+1 0A|0B) & 0xFF`, i.e. the command bytes plus the payload. Verified 2026-11-13 against every complete capture in `raw-packets.json`: power `3B 23 … -> 5E`, RGB `31 FF 00 00 00 00 0F -> 3F`, effect `38 25 10 32 -> 9F`, candle, RTC, tables, reads.
+- The old `(SEQ + 0x26)` / `(SEQ + 0x38)` rules were wrong; the captures that fit them (`power_on`, `power_off`, `wake_keepalive_*`, `static_color_green/blue/white`) are hand-made, not off the air.
+- The controller accepted RGB packets with a wrong checksum (2026-11-13); a wrong table checksum broke alarms.
 
 ## What the ZENGGE app pushes right after connect (all **optional**)
 
@@ -53,16 +44,16 @@ Info: Treat these packets as **state synchronisation** performed by the mobile a
 
 ## Command families
 
-| Header (after 80 00 00) | Purpose            | Payload format                             | CHK bias    |
-| ----------------------- | ------------------ | ------------------------------------------ | ----------- |
-| **`0D 0E 0B 3B`**       | Power ON / OFF     | `23/24 [10x00]` (21 B total)               | `0x26`      |
-| **`08 09 0B 31`**       | Static RGB         | `R G B 00 00 0F` (16 B)                    | `0x38`      |
-| **`05 06 0B 38`**       | Built-in Effect    | `effectID timeout brightness`              | `0x38`      |
-| **`09 0A 0B 39 D1`**    | Candle             | `R G B invertedSpeed brightness amplitude` | `0x38`      |
-| **`04 05 0A`**          | State query        | `81 8A 8B`                                 | payload sum |
-| **`05 06 0A`**          | Read table / clock | `22 2A 2B 0F` / `11 1A 1B 0F`              | payload sum |
-| **`0C 0D 0B`**          | RTC set            | `10 14 YY MM DD HH MM SS DOW 00 0F`        | payload sum |
-| **`58 59 0B`**          | Timer table        | 87 B table (see below)                     | payload sum |
+| Header (after 80 00 00) | Purpose            | Payload format                             | CHK |
+| ----------------------- | ------------------ | ------------------------------------------ | --- |
+| **`0D 0E 0B 3B`**       | Power ON / OFF     | `23/24 [10x00]` (21 B total)               | sum |
+| **`08 09 0B 31`**       | Static RGB         | `R G B 00 00 0F` (16 B)                    | sum |
+| **`05 06 0B 38`**       | Built-in Effect    | `effectID timeout brightness`              | sum |
+| **`09 0A 0B 39 D1`**    | Candle             | `R G B invertedSpeed brightness amplitude` | sum |
+| **`04 05 0A`**          | State query        | `81 8A 8B`                                 | sum |
+| **`05 06 0A`**          | Read table / clock | `22 2A 2B 0F` / `11 1A 1B 0F`              | sum |
+| **`0C 0D 0B`**          | RTC set            | `10 14 YY MM DD HH MM SS DOW 00 0F`        | sum |
+| **`58 59 0B`**          | Timer table        | 87 B table (see below)                     | sum |
 
 Candle speed is inverted like the effect speed, but its usable range is the
 full `0x01-0x64` (verified on hardware: `0x01` very fast, `0x1F` and `0x23`

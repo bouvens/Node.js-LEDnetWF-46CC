@@ -342,9 +342,6 @@ const PROTOCOL = {
   POWER_ON: 0x23,
   POWER_OFF: 0x24,
 
-  POWER_CHECKSUM_BASE: 0x26,
-  RGB_CHECKSUM_BASE: 0x38,
-
   RGB_TERMINATOR: [0x00, 0x00, 0x0f],
   POWER_PADDING_SIZE: 10,
   SEQUENCE_MASK: 0xff,
@@ -874,25 +871,12 @@ const nextSequence = (): number => {
 
 const powerPadding = Buffer.alloc(PROTOCOL.POWER_PADDING_SIZE, 0);
 
-function buildPacketBase(
-  header: Buffer,
-  payload: Buffer,
-  checksumBase: number,
-): Buffer {
-  const seqByte = nextSequence();
-  const checksum = (seqByte + checksumBase) & PROTOCOL.SEQUENCE_MASK;
-  return Buffer.concat([
-    Buffer.from([0, seqByte]),
-    header,
-    payload,
-    Buffer.from([checksum]),
-  ]);
-}
+// Checksum covers command bytes after the `80 00 00 LEN LEN+1 0A|0B` prefix plus the payload.
+const HEADER_PREFIX_SIZE = 6;
 
-// RTC, preludes and both timer tables checksum the payload instead of the sequence.
-function buildTablePacket(header: Buffer, payload: Buffer): Buffer {
+function buildFrame(header: Buffer, payload: Buffer): Buffer {
   const seqByte = nextSequence();
-  const checksum = payload.reduce(
+  const checksum = [...header.subarray(HEADER_PREFIX_SIZE), ...payload].reduce(
     (acc, byte) => (acc + byte) & PROTOCOL.SEQUENCE_MASK,
     0,
   );
@@ -905,21 +889,16 @@ function buildTablePacket(header: Buffer, payload: Buffer): Buffer {
 }
 
 const buildPowerPacket = (turnOn: boolean): Buffer =>
-  buildPacketBase(
+  buildFrame(
     HEADERS.POWER,
     Buffer.concat([
       Buffer.from([turnOn ? PROTOCOL.POWER_ON : PROTOCOL.POWER_OFF]),
       powerPadding,
     ]),
-    PROTOCOL.POWER_CHECKSUM_BASE,
   );
 
 const buildRgbPacket = (r: number, g: number, b: number): Buffer =>
-  buildPacketBase(
-    HEADERS.RGB,
-    Buffer.from([r, g, b, ...PROTOCOL.RGB_TERMINATOR]),
-    PROTOCOL.RGB_CHECKSUM_BASE,
-  );
+  buildFrame(HEADERS.RGB, Buffer.from([r, g, b, ...PROTOCOL.RGB_TERMINATOR]));
 
 const buildEffectPacket = (
   effectId: number,
@@ -927,7 +906,7 @@ const buildEffectPacket = (
   brightness: number,
 ): Buffer => {
   const payload = Buffer.from([effectId, timeout, brightness]);
-  return buildPacketBase(HEADERS.EFFECT, payload, PROTOCOL.RGB_CHECKSUM_BASE);
+  return buildFrame(HEADERS.EFFECT, payload);
 };
 
 // Build RTC set packet, mirroring the captured app packet byte for byte.
@@ -946,15 +925,15 @@ const buildTimePacket = (date: Date = new Date()): Buffer => {
     0x00,
     0x0f,
   ]);
-  return buildTablePacket(HEADERS.CLOCK, payload);
+  return buildFrame(HEADERS.CLOCK, payload);
 };
 
 // Build prelude sequence packets (vendor initialization)
 const buildReadAlarmsPacket = (): Buffer =>
-  buildTablePacket(HEADERS.READ, toBuffer('222a2b0f'));
+  buildFrame(HEADERS.READ, toBuffer('222a2b0f'));
 
 const buildReadClockPacket = (): Buffer =>
-  buildTablePacket(HEADERS.READ, toBuffer('111a1b0f'));
+  buildFrame(HEADERS.READ, toBuffer('111a1b0f'));
 
 const buildCandlePacket = (
   amplitude = 2,
@@ -985,7 +964,7 @@ const buildCandlePacket = (
     clampedAmplitude,
   ]);
 
-  return buildPacketBase(header, payload, PROTOCOL.RGB_CHECKSUM_BASE);
+  return buildFrame(header, payload);
 };
 
 // One 14-byte slot of the alarm table, mirroring the captured app packets.
@@ -1048,7 +1027,7 @@ const buildEffectAlarmPacket = (alarmEntries: Buffer[]): Buffer => {
     ...slots,
     Buffer.from([0x00, 0xf0]),
   ]);
-  return buildTablePacket(HEADERS.ALARM_TABLE, payload);
+  return buildFrame(HEADERS.ALARM_TABLE, payload);
 };
 
 function buildPacket(operation: Operation): Buffer {
@@ -1183,7 +1162,7 @@ async function connectAndExecute(
 
   if (query) {
     const probes: [string, Buffer][] = [
-      ['STATE', buildTablePacket(HEADERS.TIME, toBuffer('818a8b'))],
+      ['STATE', buildFrame(HEADERS.TIME, toBuffer('818a8b'))],
       ['ALARMS', buildReadAlarmsPacket()],
       ['CLOCK', buildReadClockPacket()],
     ];

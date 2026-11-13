@@ -38,7 +38,7 @@ The entire application is contained in [lednet.js](lednet.js):
 
 1. **Protocol Definitions**
    - `PROTOCOL_HEADERS` - BLE packet headers for different command types
-   - `PROTOCOL` object - Effect IDs, alarm actions, checksum bases, constants
+   - `PROTOCOL` object - Effect IDs, alarm actions, constants
    - `EFFECT_ALIASES` - User-friendly effect names mapped to protocol IDs
 
 2. **Configuration System**
@@ -65,8 +65,8 @@ The entire application is contained in [lednet.js](lednet.js):
 
 - Uses characteristic FF01 (write) and FF02 (notifications)
 - Packets follow format: `00 SEQ HEADER PAYLOAD CHK`
-- Two checksum bases: 0x26 (power/timers) and 0x38 (RGB/effects)
-- Sequence counter wraps 0-255 and persists between sessions
+- Checksum of every packet: sum of the bytes after the `80 00 00 LEN LEN+1 0A|0B` prefix (command bytes + payload), `& 0xFF`
+- Sequence counter wraps 0-255 and restarts at 0 on every run
 
 ### Configuration File
 
@@ -126,7 +126,7 @@ appear in that table and is not implemented here. Keep the terms apart.
 - ✅ Alarms **execute** - a daily ON alarm fired at the scheduled minute on a powered-off strip
 - ✅ Alarm table format decoded and confirmed by reading it back from the device
 - ✅ RTC set packet corrected (the old one queried state instead of setting the clock)
-- ✅ Checksums for RTC / table / read requests are the **sum of the payload**, not `seq + bias`
+- ✅ Checksums of all packets are the **sum of the command bytes and payload**, not `seq + bias`
 - ❌ Power OFF action encoding still unknown
 
 **Root cause of the old "alarms never execute" report** - three bugs, all ours:
@@ -184,4 +184,4 @@ The project uses Prettier with single quotes, trailing commas, and LF line endin
 
 - Successful packet transmission doesn't confirm correct protocol usage. The device doesn't return errors, so only user testing confirms if commands work.
 - "Timeout: device not found" errors may be transient - retry the command before investigating further.
-- **Checksum validation**: External projects (e.g., @8none1/zengge_lednetwf) report that checksums are **completely ignored** by the device after MTU/notification setup. However, initial testing suggested bad checksums disable timers. This discrepancy needs verification - the current implementation maintains correct checksums defensively.
+- **Checksum validation**: External projects (e.g., @8none1/zengge_lednetwf) report that checksums are **completely ignored** by the device after MTU/notification setup. However, a wrong table checksum did break alarms. RGB packets with a wrong checksum were accepted (2026-11-13). The implementation keeps every checksum correct.
