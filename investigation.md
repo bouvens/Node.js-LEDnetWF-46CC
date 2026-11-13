@@ -19,26 +19,24 @@
 - `SEQ` - 8-bit counter; this tool restarts it at 0 on every run, the device does not care.
 - `LEN` - payload length (1 byte).
 - `CHK` - one rule for every packet: `sum(bytes after 80 00 00 LEN LEN+1 0A|0B) & 0xFF`, i.e. the command bytes plus the payload. Verified 2026-11-13 against every complete capture in `raw-packets.json`: power `3B 23 … -> 5E`, RGB `31 FF 00 00 00 00 0F -> 3F`, effect `38 25 10 32 -> 9F`, candle, RTC, tables, reads.
-- The old `(SEQ + 0x26)` / `(SEQ + 0x38)` rules were wrong; the captures that fit them (`power_on`, `power_off`, `wake_keepalive_*`, `static_color_green/blue/white`) are hand-made, not off the air.
+- The old `(SEQ + 0x26)` / `(SEQ + 0x38)` rules were wrong; the only packets that fit them were computed from those rules, not captured, and have been removed.
 - The controller accepted RGB packets with a wrong checksum (2026-11-13); a wrong table checksum broke alarms.
 
 ## What the ZENGGE app pushes right after connect (all **optional**)
 
 When the official Android app attaches it fires a **burst of state-sync packets**-_not_ a handshake. They merely push the phone's clock and alarm tables to the controller:
 
-| Seq     | Header (after `80 00 00`)    | Purpose               | Bytes        | Reference                  |
-| ------- | ---------------------------- | --------------------- | ------------ | -------------------------- |
-| `00 01` | `04 05 0A`                   | **Time sync**         | 12 B         | raw-packets.json sync_time |
-| `00 02` | `0C 0D 0B`                   | **Basic timer blob**  | 20 B         | raw-packets.json alarm_on  |
-| -       | write `01 00` to CCCD 0x2902 | enable notifications  | 2 B          | BLE standard procedure     |
-| `00 03` | `0D 0E 0B 3B 25`             | **WAKE / keep-alive** | 22 B         | raw-packets.json wake      |
-| ...     | RGB / Power / Effect         | 16-21 B               | user command | raw-packets.json commands  |
+| Seq     | Header (after `80 00 00`)    | Purpose              | Bytes        | Reference                                |
+| ------- | ---------------------------- | -------------------- | ------------ | ---------------------------------------- |
+| `00 01` | `04 05 0A`                   | **State query**      | 12 B         | raw-packets.json device_info_query_seq01 |
+| `00 02` | `0C 0D 0B`                   | **RTC set**          | 20 B         | raw-packets.json rtc*set*\*              |
+| -       | write `01 00` to CCCD 0x2902 | enable notifications | 2 B          | BLE standard procedure                   |
+| ...     | RGB / Power / Effect         | 16-21 B              | user command | raw-packets.json commands                |
 
 ### Are they required?
 
 - **No.** Sending a color or power packet alone is enough; the firmware does **not** depend on the earlier writes.
 - CCCD is optional unless you need notifications.
-- WAKE frames only matter if the strip sits idle for minutes; for interactive control you can skip them.
 
 Info: Treat these packets as **state synchronisation** performed by the mobile app, not as a protocol prerequisite.
 
